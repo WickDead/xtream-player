@@ -4,10 +4,17 @@ import type {
   AppView,
   LiveChannel,
   PlaybackSession,
+  SeriesBrowseState,
   SeriesItem,
   VodItem,
   XtreamProfile,
 } from '../types/xtream'
+
+const defaultSeriesBrowseState: SeriesBrowseState = {
+  category: '★ Favorites',
+  seriesId: '',
+  seasonNumber: null,
+}
 
 export const blankProfile: XtreamProfile = {
   id: '',
@@ -21,7 +28,10 @@ export const blankProfile: XtreamProfile = {
 
 export type AppAction =
   | { type: 'navigate'; view: AppView }
+  | { type: 'navigateToLive'; channelId: string }
+  | { type: 'navigateToVod'; vodId: string }
   | { type: 'navigateToSeries'; seriesId: string }
+  | { type: 'setSeriesBrowseState'; browseState: SeriesBrowseState }
   | { type: 'selectProfile'; profileId: string }
   | { type: 'startPlayback'; session: PlaybackSession }
   | { type: 'hydrateBootstrap'; bootstrap: AppBootstrap }
@@ -30,12 +40,15 @@ export type AppAction =
   | { type: 'setSeriesItems'; seriesItems: SeriesItem[] }
   | { type: 'setDiagnostics'; diagnostics: string[] }
 
-export function createInitialState(): AppState {
+export function createInitialState(selectedProfileId = ''): AppState {
   return {
     currentView: 'dashboard',
     previousView: null,
-    selectedProfileId: '',
+    selectedProfileId,
+    pendingLiveChannelId: null,
+    pendingVodId: null,
     pendingSeriesId: null,
+    seriesBrowseState: defaultSeriesBrowseState,
     profiles: [],
     favorites: [],
     liveChannels: [],
@@ -54,18 +67,50 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       return {
         ...state,
         currentView: action.view,
+        pendingLiveChannelId: null,
+        pendingVodId: null,
+        pendingSeriesId: null,
+      }
+    case 'navigateToLive':
+      return {
+        ...state,
+        currentView: 'live',
+        pendingLiveChannelId: action.channelId,
+        pendingVodId: null,
+        pendingSeriesId: null,
+      }
+    case 'navigateToVod':
+      return {
+        ...state,
+        currentView: 'vod',
+        pendingLiveChannelId: null,
+        pendingVodId: action.vodId,
         pendingSeriesId: null,
       }
     case 'navigateToSeries':
       return {
         ...state,
         currentView: 'series',
+        pendingLiveChannelId: null,
+        pendingVodId: null,
         pendingSeriesId: action.seriesId,
+      }
+    case 'setSeriesBrowseState':
+      return {
+        ...state,
+        seriesBrowseState: action.browseState,
       }
     case 'selectProfile':
       return {
         ...state,
         selectedProfileId: action.profileId,
+        pendingLiveChannelId: null,
+        pendingVodId: null,
+        pendingSeriesId: null,
+        seriesBrowseState: defaultSeriesBrowseState,
+        liveChannels: [],
+        vodItems: [],
+        seriesItems: [],
       }
     case 'hydrateBootstrap': {
       const profiles = action.bootstrap.profiles

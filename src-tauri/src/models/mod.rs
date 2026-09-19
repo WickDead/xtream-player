@@ -85,6 +85,7 @@ pub struct LiveChannel {
     pub id: String,
     pub name: String,
     pub category: String,
+    pub category_order: Option<i64>,
     pub epg_channel_id: Option<String>,
     pub current_program: String,
     pub next_program: String,
@@ -101,9 +102,22 @@ pub struct VodItem {
     pub duration_label: String,
     pub quality: String,
     pub description: String,
+    pub rating: Option<String>,
     pub image_url: Option<String>,
     pub stream_url: String,
     pub added: Option<i64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VodDetail {
+    pub vod_id: String,
+    pub description: String,
+    pub duration_label: Option<String>,
+    pub released_at: Option<String>,
+    pub image_url: Option<String>,
+    pub genre: Option<String>,
+    pub rating: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -115,6 +129,7 @@ pub struct SeriesItem {
     pub season_count: i64,
     pub episode_count: i64,
     pub description: String,
+    pub rating: Option<String>,
     pub first_episode_title: String,
     pub image_url: Option<String>,
     pub stream_url: String,
@@ -153,6 +168,7 @@ pub struct SeriesEpisode {
 pub struct SeriesDetail {
     pub series_id: String,
     pub title: String,
+    pub rating: Option<String>,
     pub seasons: Vec<SeriesSeason>,
     pub episodes_by_season: std::collections::HashMap<String, Vec<SeriesEpisode>>,
 }

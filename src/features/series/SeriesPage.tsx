@@ -42,13 +42,38 @@ function startSeriesPlayback(
   })
 }
 
+function getDisplayCounts(item: SeriesItem, detail?: SeriesDetail | null) {
+  if (!detail) {
+    return {
+      seasonCount: item.seasonCount,
+      episodeCount: item.episodeCount,
+    }
+  }
+
+  return {
+    seasonCount: detail.seasons.length,
+    episodeCount: Object.values(detail.episodesBySeason).reduce(
+      (total, episodes) => total + episodes.length,
+      0,
+    ),
+  }
+}
+
+function formatRatingLabel(rating?: string | null) {
+  if (!rating) {
+    return null
+  }
+
+  return `${rating}/10`
+}
+
 export function SeriesPage({ state, dispatch, refreshBootstrap }: SeriesPageProps) {
   const [, setStatusMessage] = useState('')
   const [statusTone, setStatusTone] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
-  const [selectedCategory, setSelectedCategory] = useState<string>('★ Favorites')
+  const [selectedCategory, setSelectedCategory] = useState<string>(state.seriesBrowseState.category)
   const [filterText, setFilterText] = useState('')
-  const [selectedSeriesId, setSelectedSeriesId] = useState<string>('')
-  const [selectedSeason, setSelectedSeason] = useState<number | null>(null)
+  const [selectedSeriesId, setSelectedSeriesId] = useState<string>(state.seriesBrowseState.seriesId)
+  const [selectedSeason, setSelectedSeason] = useState<number | null>(state.seriesBrowseState.seasonNumber)
   const [seriesDetailById, setSeriesDetailById] = useState<Record<string, SeriesDetail>>({})
   const [detailLoadingId, setDetailLoadingId] = useState<string | null>(null)
   const [visibleLimit, setVisibleLimit] = useState(SERIES_BATCH_SIZE)
@@ -126,6 +151,8 @@ export function SeriesPage({ state, dispatch, refreshBootstrap }: SeriesPageProp
   const activeSeries =
     visibleSeries.find((item) => item.id === selectedSeriesId) ?? displayedSeries[0] ?? visibleSeries[0] ?? null
   const activeDetail = activeSeries ? seriesDetailById[activeSeries.id] ?? null : null
+  const activeCounts = activeSeries ? getDisplayCounts(activeSeries, activeDetail) : null
+  const activeRatingLabel = formatRatingLabel(activeDetail?.rating ?? activeSeries?.rating)
   const activeSeasonNumber =
     activeDetail?.seasons.find((season) => season.seasonNumber === selectedSeason)?.seasonNumber ??
     activeDetail?.seasons[0]?.seasonNumber ??
@@ -160,6 +187,24 @@ export function SeriesPage({ state, dispatch, refreshBootstrap }: SeriesPageProp
     setVisibleLimit(SERIES_BATCH_SIZE)
     setFilterText('')
   }, [activeCategory])
+
+  useEffect(() => {
+    const nextBrowseState = {
+      category: selectedCategory,
+      seriesId: selectedSeriesId,
+      seasonNumber: selectedSeason,
+    }
+
+    if (
+      state.seriesBrowseState.category === nextBrowseState.category &&
+      state.seriesBrowseState.seriesId === nextBrowseState.seriesId &&
+      state.seriesBrowseState.seasonNumber === nextBrowseState.seasonNumber
+    ) {
+      return
+    }
+
+    dispatch({ type: 'setSeriesBrowseState', browseState: nextBrowseState })
+  }, [dispatch, selectedCategory, selectedSeason, selectedSeriesId, state.seriesBrowseState])
 
   useEffect(() => {
     if (
@@ -350,6 +395,10 @@ export function SeriesPage({ state, dispatch, refreshBootstrap }: SeriesPageProp
           <div className="poster-grid" style={{ marginTop: '18px' }}>
             {isInitialCatalogLoading ? <LoadingSkeleton variant="poster" count={6} /> : null}
             {!isInitialCatalogLoading && displayedSeries.map((item) => (
+              (() => {
+                const displayCounts = getDisplayCounts(item, seriesDetailById[item.id])
+
+                return (
               <button
                 key={item.id}
                 ref={item.id === activeSeries?.id ? activeSeriesRef : undefined}
@@ -373,11 +422,13 @@ export function SeriesPage({ state, dispatch, refreshBootstrap }: SeriesPageProp
                     <span className="pill">{item.genre}</span>
                     <div className="poster-meta">
                       <h3>{item.title}</h3>
-                      <p>{item.seasonCount} seasons • {item.episodeCount} episodes</p>
+                      <p>{displayCounts.seasonCount} seasons • {displayCounts.episodeCount} episodes</p>
                     </div>
                   </div>
                 </div>
               </button>
+                )
+              })()
             ))}
             {!isInitialCatalogLoading && categories.length > 0 && visibleSeries.length === 0 ? (
               <div className="list-row">
@@ -426,29 +477,32 @@ export function SeriesPage({ state, dispatch, refreshBootstrap }: SeriesPageProp
                 {favoriteIds.has(activeSeries.id) ? 'Remove favorite' : 'Add favorite'}
               </button>
               <span className="pill">{activeSeries.genre}</span>
-              <span className="pill">{activeSeries.seasonCount} seasons</span>
+              {activeRatingLabel ? <span className="pill">Rating {activeRatingLabel}</span> : null}
+              <span className="pill">{activeCounts?.seasonCount ?? activeSeries.seasonCount} seasons</span>
             </div>
           ) : null}
           {detailLoadingId === activeSeries?.id ? (
             <LoadingSkeleton variant="row" count={4} />
           ) : null}
           {activeDetail ? (
-            <>
-              <div className="pill-row" style={{ marginTop: '18px' }}>
-                {activeDetail.seasons.map((season) => (
-                  <button
-                    key={season.id}
-                    ref={season.seasonNumber === activeSeasonNumber ? activeSeasonRef : undefined}
-                    type="button"
-                    className={season.seasonNumber === activeSeasonNumber ? 'selection-item compact active' : 'selection-item compact'}
-                    onClick={() => setSelectedSeason(season.seasonNumber)}
-                  >
-                    <strong>{season.name}</strong>
-                    <span>{season.episodeCount} episodes</span>
-                  </button>
-                ))}
+            <div className="series-detail-body">
+              <div className="series-season-picker" style={{ marginTop: '18px' }}>
+                <div className="pill-row">
+                  {activeDetail.seasons.map((season) => (
+                    <button
+                      key={season.id}
+                      ref={season.seasonNumber === activeSeasonNumber ? activeSeasonRef : undefined}
+                      type="button"
+                      className={season.seasonNumber === activeSeasonNumber ? 'selection-item compact active' : 'selection-item compact'}
+                      onClick={() => setSelectedSeason(season.seasonNumber)}
+                    >
+                      <strong>{season.name}</strong>
+                      <span>{season.episodeCount} episodes</span>
+                    </button>
+                  ))}
+                </div>
               </div>
-              <div className="list-stack" style={{ marginTop: '18px' }}>
+              <div className="list-stack series-episode-list" style={{ marginTop: '18px' }}>
                 {activeEpisodes.map((episode) => (
                   <div key={episode.id} className="list-row episode-row">
                     <div className="episode-row__copy">
@@ -478,7 +532,7 @@ export function SeriesPage({ state, dispatch, refreshBootstrap }: SeriesPageProp
                   </div>
                 ) : null}
               </div>
-            </>
+            </div>
           ) : activeSeries ? (
             <p className="workspace-copy" style={{ marginTop: '18px' }}>
               Pick a series to load its seasons and episodes.

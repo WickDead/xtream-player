@@ -70,6 +70,22 @@ export function LivePage({ state, dispatch, refreshBootstrap }: LivePageProps) {
     }
     return counts
   }, [state.liveChannels])
+  const categoryOrderByName = useMemo(() => {
+    const order = new Map<string, number>()
+
+    for (const channel of state.liveChannels) {
+      if (channel.categoryOrder == null) {
+        continue
+      }
+
+      const current = order.get(channel.category)
+      if (current == null || channel.categoryOrder < current) {
+        order.set(channel.category, channel.categoryOrder)
+      }
+    }
+
+    return order
+  }, [state.liveChannels])
   const categories = useMemo(() => {
     const items = Array.from(categoryCounts.keys())
 
@@ -88,7 +104,16 @@ export function LivePage({ state, dispatch, refreshBootstrap }: LivePageProps) {
         break
       case 'api':
       default:
-        sorted = items
+        sorted = [...items].sort((left, right) => {
+          const leftOrder = categoryOrderByName.get(left) ?? Number.MAX_SAFE_INTEGER
+          const rightOrder = categoryOrderByName.get(right) ?? Number.MAX_SAFE_INTEGER
+
+          if (leftOrder !== rightOrder) {
+            return leftOrder - rightOrder
+          }
+
+          return left.localeCompare(right)
+        })
     }
 
     // Filter hidden unless showHidden is true
@@ -97,7 +122,7 @@ export function LivePage({ state, dispatch, refreshBootstrap }: LivePageProps) {
     }
 
     return sorted
-  }, [categoryCounts, categorySort, isHidden, showHidden])
+  }, [categoryCounts, categoryOrderByName, categorySort, isHidden, showHidden])
 
   const favoriteChannelIds = useMemo(
     () => new Set(state.favorites.filter((f) => f.kind === 'live').map((f) => f.contentId)),
@@ -216,6 +241,17 @@ export function LivePage({ state, dispatch, refreshBootstrap }: LivePageProps) {
       setSelectedChannelId(visibleChannels[0]?.id ?? '')
     }
   }, [visibleChannels, selectedChannelId])
+
+  useEffect(() => {
+    if (state.pendingLiveChannelId && state.liveChannels.length > 0) {
+      const target = state.liveChannels.find((channel) => channel.id === state.pendingLiveChannelId)
+      if (target) {
+        setSelectedCategory(target.category || '★ Favorites')
+        setSelectedChannelId(target.id)
+      }
+      dispatch({ type: 'navigate', view: 'live' })
+    }
+  }, [dispatch, state.liveChannels, state.pendingLiveChannelId])
 
   useEffect(() => {
     if (activeChannel && !epgByStreamId[activeChannel.id] && loadingGuideChannelId !== activeChannel.id) {
@@ -343,7 +379,7 @@ export function LivePage({ state, dispatch, refreshBootstrap }: LivePageProps) {
               visibleChannels.map((channel) => (
                 <div
                   key={channel.id}
-                  className={channel.id === activeChannel?.id ? 'list-row list-row--selected' : 'list-row'}
+                  className={channel.id === activeChannel?.id ? 'list-row live-channel-row list-row--selected' : 'list-row live-channel-row'}
                   role="button"
                   tabIndex={0}
                   onClick={() => setSelectedChannelId(channel.id)}
@@ -354,7 +390,7 @@ export function LivePage({ state, dispatch, refreshBootstrap }: LivePageProps) {
                     }
                   }}
                 >
-                  <div>
+                  <div className="live-channel-row__copy">
                     <h3>{channel.name}</h3>
                     <p>
                       {channel.category} • {channel.bitrateLabel}
@@ -368,11 +404,10 @@ export function LivePage({ state, dispatch, refreshBootstrap }: LivePageProps) {
                       {epgByStreamId[channel.id]?.[1]?.title ?? channel.nextProgram}
                     </p>
                   </div>
-                  <div className="stack" style={{ flexDirection: 'column', alignItems: 'stretch', minWidth: '140px' }}>
+                  <div className="live-channel-row__actions">
                     <button
                       type="button"
-                      className="inline-action"
-                      style={{ width: '100%' }}
+                      className="inline-action live-action-btn"
                       onClick={(event) => {
                         event.stopPropagation()
                         void handleFavoriteToggle(channel)
@@ -382,8 +417,7 @@ export function LivePage({ state, dispatch, refreshBootstrap }: LivePageProps) {
                     </button>
                     <button
                       type="button"
-                      className="inline-action"
-                      style={{ width: '100%' }}
+                      className="inline-action live-action-btn live-action-btn--primary"
                       onClick={(event) => {
                         event.stopPropagation()
                         startLivePlayback(dispatch, channel)
@@ -431,17 +465,17 @@ export function LivePage({ state, dispatch, refreshBootstrap }: LivePageProps) {
                       'Guide details load automatically when you select a channel.'}
                   </p>
                 </div>
-                <div className="stack">
+                <div className="live-guide-actions">
                   <button
                     type="button"
-                    className="secondary-action"
+                    className="secondary-action live-guide-action-btn"
                     onClick={() => void handleRefreshEpg(activeChannel)}
                   >
                     Refresh guide
                   </button>
                   <button
                     type="button"
-                    className="primary-action"
+                    className="primary-action live-guide-action-btn"
                     onClick={() => startLivePlayback(dispatch, activeChannel)}
                   >
                     Play selected channel

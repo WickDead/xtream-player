@@ -8,9 +8,11 @@ use std::{
 };
 
 use serde_json::json;
-use tauri::State;
+use tauri::{AppHandle, State};
 
 use crate::{models::PlayerStatus, AppState};
+
+use super::vlc;
 
 #[tauri::command]
 pub fn get_player_status(state: State<'_, AppState>) -> PlayerStatus {
@@ -20,10 +22,13 @@ pub fn get_player_status(state: State<'_, AppState>) -> PlayerStatus {
 
 #[tauri::command]
 pub fn start_internal_playback(
+    app: AppHandle,
     title: String,
     stream_url: String,
     state: State<'_, AppState>,
 ) -> Result<PlayerStatus, String> {
+    vlc::stop_active_vlc_playback(Some(&app));
+
     let mut playback = state.playback.lock().expect("playback state poisoned");
     let executable = locate_mpv_executable().ok_or_else(|| {
         playback.last_error = Some(
@@ -41,16 +46,48 @@ pub fn start_internal_playback(
         .clone()
         .ok_or_else(|| "Internal mpv IPC pipe is unavailable".to_string())?;
 
+    send_ipc_command(
+        &pipe_name,
+        json!({"command": ["set_property", "alang", "eng,en,english"]}),
+    )?;
     send_ipc_command(&pipe_name, json!({"command": ["loadfile", stream_url, "replace"]}))?;
 
     playback.active_title = Some(title);
     playback.active_url = Some(stream_url);
+    playback.preferred_engine = "Embedded mpv bridge".into();
+    playback.fallback_behavior = "Embedded VLC surface or external player handoff".into();
     playback.paused = false;
     playback.available = true;
     playback.transport = "managed-mpv-ipc".into();
     playback.executable_path = Some(executable.to_string_lossy().to_string());
     playback.last_error = None;
 
+    Ok(status_from_state(&playback))
+}
+
+#[tauri::command]
+pub fn cycle_internal_audio_track(state: State<'_, AppState>) -> Result<PlayerStatus, String> {
+    {
+        let playback = state.playback.lock().expect("playback state poisoned");
+        if playback.transport == "managed-vlc-embedded" {
+            drop(playback);
+            let switched = vlc::cycle_active_vlc_audio_track()?;
+            if !switched {
+                return Err("The embedded VLC player did not expose multiple audio tracks for this stream.".to_string());
+            }
+
+            let playback = state.playback.lock().expect("playback state poisoned");
+            return Ok(status_from_state(&playback));
+        }
+    }
+
+    let playback = state.playback.lock().expect("playback state poisoned");
+    let pipe_name = playback
+        .internal_pipe
+        .clone()
+        .ok_or_else(|| "Internal mpv engine is not running".to_string())?;
+
+    send_ipc_command(&pipe_name, json!({"command": ["cycle", "aid"]}))?;
     Ok(status_from_state(&playback))
 }
 
@@ -81,10 +118,20 @@ pub fn seek_internal_playback(seconds: i64, state: State<'_, AppState>) -> Resul
 
 #[tauri::command]
 pub fn stop_internal_playback(state: State<'_, AppState>) -> Result<PlayerStatus, String> {
-    let mut playback = state.playback.lock().expect("playback state poisoned");
+    stop_internal_playback_with_app(None, state)
+}
+
+fn stop_internal_playback_with_app(
+    app: Option<AppHandle>,
+    state: State<'_, AppState>,
+) -> Result<PlayerStatus, String> {
+    let playback = state.playback.lock().expect("playback state poisoned");
     if let Some(pipe_name) = playback.internal_pipe.clone() {
         let _ = send_ipc_command(&pipe_name, json!({"command": ["stop"]}));
     }
+    drop(playback);
+    vlc::stop_active_vlc_playback(app.as_ref());
+    let mut playback = state.playback.lock().expect("playback state poisoned");
 
     playback.active_title = None;
     playback.active_url = None;
@@ -94,9 +141,13 @@ pub fn stop_internal_playback(state: State<'_, AppState>) -> Result<PlayerStatus
 }
 
 #[tauri::command]
-pub fn open_external_player(stream_url: String, state: State<'_, AppState>) -> Result<PlayerStatus, String> {
+pub fn open_external_player(
+    stream_url: String,
+    preferred_player: Option<String>,
+    state: State<'_, AppState>,
+) -> Result<PlayerStatus, String> {
     let mut playback = state.playback.lock().expect("playback state poisoned");
-    let executable = locate_external_player().ok_or_else(|| {
+    let executable = locate_external_player(preferred_player.as_deref()).ok_or_else(|| {
         playback.last_error = Some(
             "No external player was found. Install mpv or VLC to use fallback playback."
                 .into(),
@@ -181,10 +232,19 @@ fn locate_mpv_executable() -> Option<PathBuf> {
     locate_from_path("mpv.exe").or_else(|| locate_from_winget("mpv.exe"))
 }
 
-fn locate_external_player() -> Option<PathBuf> {
-    locate_mpv_executable()
-        .or_else(|| locate_from_path("vlc.exe"))
+fn locate_vlc_executable() -> Option<PathBuf> {
+    locate_from_path("vlc.exe")
+        .or_else(|| locate_from_common_install_dir(r"C:\Program Files\VideoLAN\VLC\vlc.exe"))
+        .or_else(|| locate_from_common_install_dir(r"C:\Program Files (x86)\VideoLAN\VLC\vlc.exe"))
         .or_else(|| locate_from_winget("vlc.exe"))
+}
+
+fn locate_external_player(preferred_player: Option<&str>) -> Option<PathBuf> {
+    match preferred_player.unwrap_or("auto") {
+        "vlc" => locate_vlc_executable().or_else(locate_mpv_executable),
+        "mpv" => locate_mpv_executable().or_else(locate_vlc_executable),
+        _ => locate_vlc_executable().or_else(locate_mpv_executable),
+    }
 }
 
 fn locate_from_path(file_name: &str) -> Option<PathBuf> {
@@ -205,6 +265,11 @@ fn locate_from_winget(file_name: &str) -> Option<PathBuf> {
         }
     }
     None
+}
+
+fn locate_from_common_install_dir(path: &str) -> Option<PathBuf> {
+    let candidate = PathBuf::from(path);
+    candidate.exists().then_some(candidate)
 }
 
 fn status_from_state(playback: &crate::state::playback::PlaybackState) -> PlayerStatus {

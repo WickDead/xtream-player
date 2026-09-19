@@ -8,6 +8,8 @@ import {
 import { loadBootstrap, loadLiveCatalog, loadSeriesCatalog, loadVodCatalog } from './lib/backend'
 import type { AppView } from './types/xtream'
 
+const ACTIVE_PROVIDER_STORAGE_KEY = 'xtream-player.active-provider-id'
+
 const navigation: Array<{ view: AppView; label: string }> = [
   { view: 'dashboard', label: 'Overview' },
   { view: 'providers', label: 'Providers' },
@@ -17,14 +19,73 @@ const navigation: Array<{ view: AppView; label: string }> = [
   { view: 'player', label: 'Player' },
 ]
 
+function formatExpiryLabel(value: string) {
+  const trimmed = value.trim()
+  if (!trimmed || /unknown|browser fallback/i.test(trimmed)) {
+    return 'Expires: Unknown'
+  }
+
+  if (/^\d+$/.test(trimmed)) {
+    const unixSeconds = Number(trimmed)
+    if (Number.isFinite(unixSeconds) && unixSeconds > 0) {
+      return `Expires: ${new Date(unixSeconds * 1000).toLocaleDateString([], {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+      })}`
+    }
+  }
+
+  const parsed = new Date(trimmed)
+  if (!Number.isNaN(parsed.getTime())) {
+    return `Expires: ${parsed.toLocaleDateString([], {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    })}`
+  }
+
+  return `Expires: ${trimmed}`
+}
+
+function formatLastSyncedLabel(value?: number) {
+  if (!value) {
+    return 'Last synced: Never'
+  }
+
+  return `Last synced: ${new Date(value).toLocaleString([], {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  })}`
+}
+
 function App() {
-  const [state, dispatch] = useReducer(appReducer, undefined, createInitialState)
+  const [state, dispatch] = useReducer(
+    appReducer,
+    undefined,
+    () => createInitialState(window.localStorage.getItem(ACTIVE_PROVIDER_STORAGE_KEY) ?? ''),
+  )
   const [bootstrapStatus, setBootstrapStatus] = useState('Loading desktop bridge...')
   const [catalogStatus, setCatalogStatus] = useState('Catalogs idle')
   const [catalogSyncState, setCatalogSyncState] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
+  const [lastSyncedByProfile, setLastSyncedByProfile] = useState<Record<string, number>>({})
   const syncedProfileRef = useRef<string | null>(null)
   const syncRequestIdRef = useRef(0)
   const selectedProfile = getSelectedProfile(state)
+
+  function selectProfile(profileId: string) {
+    if (!profileId || profileId === state.selectedProfileId) {
+      return
+    }
+
+    ++syncRequestIdRef.current
+    syncedProfileRef.current = null
+    window.localStorage.setItem(ACTIVE_PROVIDER_STORAGE_KEY, profileId)
+    dispatch({ type: 'selectProfile', profileId })
+  }
 
   async function refreshBootstrap() {
     try {
@@ -99,6 +160,10 @@ function App() {
     }
 
     setCatalogSyncState('success')
+    setLastSyncedByProfile((current) => ({
+      ...current,
+      [profileId]: Date.now(),
+    }))
     setCatalogStatus(
       `Loaded ${liveCount} live channels, ${vodCount} movies, and ${seriesCount} series.`,
     )
@@ -114,24 +179,33 @@ function App() {
   }, [])
 
   useEffect(() => {
+    if (state.selectedProfileId) {
+      window.localStorage.setItem(ACTIVE_PROVIDER_STORAGE_KEY, state.selectedProfileId)
+    } else {
+      window.localStorage.removeItem(ACTIVE_PROVIDER_STORAGE_KEY)
+    }
+  }, [state.selectedProfileId])
+
+  useEffect(() => {
     if (!state.selectedProfileId || syncedProfileRef.current === state.selectedProfileId) {
       return
     }
 
     void syncAllCatalogs(
       state.selectedProfileId,
-      state.liveChannels.length === 0 && state.vodItems.length === 0 && state.seriesItems.length === 0
-        ? 'startup'
-        : 'profile-change',
+      'profile-change',
     )
   }, [state.selectedProfileId])
+
+  const lastSyncedLabel = formatLastSyncedLabel(lastSyncedByProfile[state.selectedProfileId])
+  const expiryLabel = formatExpiryLabel(selectedProfile.expiresAt || 'Unknown')
 
   return (
     <div className="application-shell">
       <aside className="sidebar">
         <div>
           <p className="eyebrow">Xtream Player</p>
-          <h1 className="sidebar-title">Desktop IPTV foundation</h1>
+          <h1 className="sidebar-title">Desktop IPTV</h1>
           <p className="sidebar-copy">
             Windows-first shell with the backend shape for Xtream browsing,
             playback, persistence, and recording.
@@ -167,16 +241,22 @@ function App() {
             <p className="workspace-copy" style={{ marginTop: '8px' }}>{catalogStatus}</p>
           </div>
           <div className="topbar-meta">
-            <span className="pill">{selectedProfile.status || 'Idle'}</span>
-            <span className="pill">
-              {catalogSyncState === 'loading'
-                ? 'Catalog sync: loading'
-                : catalogSyncState === 'error'
-                  ? 'Catalog sync: issue'
-                  : catalogSyncState === 'success'
-                    ? 'Catalog sync: ready'
-                    : 'Catalog sync: idle'}
-            </span>
+            <label className="provider-switcher">
+              <span>Active provider</span>
+              <select
+                aria-label="Active provider"
+                value={state.selectedProfileId}
+                onChange={(event) => selectProfile(event.target.value)}
+                disabled={state.profiles.length === 0}
+              >
+                {state.profiles.length === 0 ? <option value="">No providers saved</option> : null}
+                {state.profiles.map((profile) => (
+                  <option key={profile.id} value={profile.id}>{profile.name}</option>
+                ))}
+              </select>
+            </label>
+            <span className="pill">{expiryLabel}</span>
+            <span className="pill">{lastSyncedLabel}</span>
             <button
               type="button"
               className="secondary-action"
@@ -185,7 +265,6 @@ function App() {
             >
               {catalogSyncState === 'loading' ? 'Refreshing library...' : 'Refresh library'}
             </button>
-            <span className="pill">Preferred engine: mpv bridge</span>
           </div>
         </header>
 
@@ -194,6 +273,7 @@ function App() {
             state={state}
             dispatch={dispatch}
             refreshBootstrap={refreshBootstrap}
+            onSelectProfile={selectProfile}
           />
         </div>
       </section>

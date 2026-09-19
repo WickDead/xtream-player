@@ -9,14 +9,16 @@ use std::{path::PathBuf, sync::Mutex};
 
 use api::xtream::{
     add_favorite, fetch_live_catalog, fetch_series_catalog, fetch_short_epg,
-    fetch_series_detail, fetch_vod_catalog, fetch_xmltv_snapshot, remove_favorite,
+    fetch_series_detail, fetch_vod_catalog, fetch_vod_detail, fetch_xmltv_snapshot, remove_favorite,
     save_profile, save_resume_checkpoint,
 };
 use api::{
+    embedded_proxy::resolve_embedded_stream_url,
     player::{
-        get_player_status, open_external_player, seek_internal_playback,
+        cycle_internal_audio_track, get_player_status, open_external_player, seek_internal_playback,
         start_internal_playback, stop_internal_playback, toggle_internal_pause,
     },
+    vlc::{start_native_vlc_window_playback, sync_embedded_vlc_bounds},
     xtream::{get_bootstrap_state, login_preview},
 };
 use persistence::sqlite;
@@ -54,6 +56,7 @@ fn main() {
             save_profile,
             fetch_live_catalog,
             fetch_vod_catalog,
+            fetch_vod_detail,
             fetch_series_catalog,
             fetch_series_detail,
             fetch_short_epg,
@@ -61,8 +64,12 @@ fn main() {
             add_favorite,
             remove_favorite,
             save_resume_checkpoint,
+            resolve_embedded_stream_url,
             get_player_status,
             start_internal_playback,
+            start_native_vlc_window_playback,
+            sync_embedded_vlc_bounds,
+            cycle_internal_audio_track,
             toggle_internal_pause,
             seek_internal_playback,
             stop_internal_playback,

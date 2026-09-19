@@ -327,3 +327,72 @@ pub fn save_resume_checkpoint(
         progress_percent,
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn profile_request(id: Option<String>, name: &str, username: &str) -> SaveProfileRequest {
+        SaveProfileRequest {
+            id,
+            name: name.to_string(),
+            server_url: format!("https://{name}.example.com"),
+            username: username.to_string(),
+            password: format!("{username}-password"),
+        }
+    }
+
+    #[test]
+    fn creates_multiple_profiles_and_updates_only_the_requested_profile() {
+        let path = std::env::temp_dir().join(format!(
+            "xtream-player-profile-test-{}.sqlite",
+            Uuid::new_v4()
+        ));
+
+        ensure_database(&path).expect("database should initialize");
+
+        let first = save_profile(
+            &path,
+            &profile_request(None, "provider-a", "user-a"),
+            "Active",
+            "Unknown",
+            1,
+        )
+        .expect("first profile should save");
+        let second = save_profile(
+            &path,
+            &profile_request(None, "provider-b", "user-b"),
+            "Active",
+            "Unknown",
+            2,
+        )
+        .expect("second profile should save");
+
+        assert_ne!(first.id, second.id);
+        assert_eq!(list_profiles(&path).expect("profiles should load").len(), 2);
+
+        let updated = save_profile(
+            &path,
+            &profile_request(Some(first.id.clone()), "provider-a-updated", "user-a-new"),
+            "Active",
+            "2030-01-01",
+            3,
+        )
+        .expect("existing profile should update");
+        let profiles = list_profiles(&path).expect("updated profiles should load");
+
+        assert_eq!(updated.id, first.id);
+        assert_eq!(profiles.len(), 2);
+        assert!(profiles.iter().any(|profile| {
+            profile.id == first.id
+                && profile.name == "provider-a-updated"
+                && profile.username == "user-a-new"
+        }));
+        assert!(profiles.iter().any(|profile| {
+            profile.id == second.id && profile.name == "provider-b" && profile.username == "user-b"
+        }));
+
+        drop(profiles);
+        std::fs::remove_file(path).expect("test database should be removable");
+    }
+}

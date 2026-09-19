@@ -3,7 +3,6 @@ import { LoadingSkeleton } from '../../components/LoadingSkeleton'
 import { StatusBanner, type StatusTone } from '../../components/StatusBanner'
 import { previewProvider, saveProviderProfile } from '../../lib/backend'
 import { getSelectedProfile } from '../../stores/appStore'
-import type { AppAction } from '../../stores/appStore'
 import type { AppState, ProviderPreview } from '../../types/xtream'
 
 function normalizeServerUrl(value: string) {
@@ -32,13 +31,16 @@ function deriveProfileName(name: string, username: string, serverUrl: string) {
 
 interface LoginPageProps {
   state: AppState
-  dispatch: React.Dispatch<AppAction>
   refreshBootstrap: () => Promise<void>
+  onSelectProfile: (profileId: string) => void
 }
 
-export function LoginPage({ state, dispatch, refreshBootstrap }: LoginPageProps) {
+export function LoginPage({ state, refreshBootstrap, onSelectProfile }: LoginPageProps) {
   const selectedProfile = getSelectedProfile(state)
   const hasSavedSelection = state.profiles.some((profile) => profile.id === selectedProfile.id)
+  const [editingProfileId, setEditingProfileId] = useState<string | null>(
+    hasSavedSelection ? selectedProfile.id : null,
+  )
   const [name, setName] = useState(selectedProfile.name)
   const [serverUrl, setServerUrl] = useState(selectedProfile.serverUrl)
   const [username, setUsername] = useState(selectedProfile.username)
@@ -49,6 +51,7 @@ export function LoginPage({ state, dispatch, refreshBootstrap }: LoginPageProps)
   const isBusy = statusTone === 'loading'
 
   useEffect(() => {
+    setEditingProfileId(hasSavedSelection ? selectedProfile.id : null)
     setName(selectedProfile.name)
     setServerUrl(selectedProfile.serverUrl)
     setUsername(selectedProfile.username)
@@ -56,7 +59,18 @@ export function LoginPage({ state, dispatch, refreshBootstrap }: LoginPageProps)
     setPreview(null)
     setStatusMessage('')
     setStatusTone('idle')
-  }, [selectedProfile])
+  }, [hasSavedSelection, selectedProfile])
+
+  function loadProfileForEditing(profile: typeof selectedProfile) {
+    setEditingProfileId(profile.id)
+    setName(profile.name)
+    setServerUrl(profile.serverUrl)
+    setUsername(profile.username)
+    setPassword('')
+    setPreview(null)
+    setStatusMessage('')
+    setStatusTone('idle')
+  }
 
   async function handlePreview() {
     const normalizedServerUrl = normalizeServerUrl(serverUrl)
@@ -75,7 +89,7 @@ export function LoginPage({ state, dispatch, refreshBootstrap }: LoginPageProps)
     setStatusMessage('Previewing Xtream credentials...')
     try {
       const response = await previewProvider({
-        id: hasSavedSelection ? selectedProfile.id : undefined,
+        id: editingProfileId ?? undefined,
         name: normalizedName,
         serverUrl: normalizedServerUrl,
         username: normalizedUsername,
@@ -110,8 +124,8 @@ export function LoginPage({ state, dispatch, refreshBootstrap }: LoginPageProps)
     setStatusTone('loading')
     setStatusMessage('Saving provider profile...')
     try {
-      await saveProviderProfile({
-        id: hasSavedSelection ? selectedProfile.id : undefined,
+      const savedProfile = await saveProviderProfile({
+        id: editingProfileId ?? undefined,
         name: normalizedName,
         serverUrl: normalizedServerUrl,
         username: normalizedUsername,
@@ -121,6 +135,8 @@ export function LoginPage({ state, dispatch, refreshBootstrap }: LoginPageProps)
       setServerUrl(normalizedServerUrl)
       setUsername(normalizedUsername)
       await refreshBootstrap()
+      setEditingProfileId(savedProfile.id)
+      onSelectProfile(savedProfile.id)
       setStatusTone('success')
       setStatusMessage('Provider profile saved to SQLite.')
     } catch (error) {
@@ -184,7 +200,7 @@ export function LoginPage({ state, dispatch, refreshBootstrap }: LoginPageProps)
               className="secondary-action"
               disabled={isBusy}
               onClick={() => {
-                dispatch({ type: 'selectProfile', profileId: '' })
+                setEditingProfileId(null)
                 setName('')
                 setServerUrl('')
                 setUsername('')
@@ -247,23 +263,31 @@ export function LoginPage({ state, dispatch, refreshBootstrap }: LoginPageProps)
                 </div>
               </div>
             ) : null}
-            {!isBusy && state.profiles.map((profile) => (
-              <div key={profile.id} className="list-row">
-                <div>
-                  <h3>{profile.name}</h3>
-                  <p>
-                    {profile.serverUrl} • max {profile.maxConnections} connections
-                  </p>
+            {!isBusy && state.profiles.map((profile) => {
+              const isActive = profile.id === state.selectedProfileId
+
+              return (
+                <div key={profile.id} className={isActive ? 'list-row active-provider-row' : 'list-row'}>
+                  <div>
+                    <h3>{profile.name}</h3>
+                    <p>
+                      {profile.serverUrl} • max {profile.maxConnections} connections
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    className="inline-action"
+                    aria-pressed={isActive}
+                    onClick={() => {
+                      loadProfileForEditing(profile)
+                      onSelectProfile(profile.id)
+                    }}
+                  >
+                    {isActive ? 'Active · Edit' : 'Select'}
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  className="inline-action"
-                  onClick={() => dispatch({ type: 'selectProfile', profileId: profile.id })}
-                >
-                  Select
-                </button>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </article>
       </section>

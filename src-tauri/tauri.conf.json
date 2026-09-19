@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Xtream Player",
-  "version": "0.1.1",
-  "identifier": "com.xtreamplayer.desktop",
+  "version": "0.1.2",
+  "identifier": "io.opensourceiptv.xtreamplayer",
   "build": {
     "beforeDevCommand": "npm run dev",
     "beforeBuildCommand": "npm run build",
@@ -25,13 +25,18 @@
   },
   "bundle": {
     "active": true,
+    "publisher": "Open Source IPTV",
     "icon": [
       "icons/icon.ico"
     ],
-    "targets": "all",
+    "targets": "msi",
     "windows": {
+      "allowDowngrades": false,
       "digestAlgorithm": "sha256",
-      "timestampUrl": ""
+      "timestampUrl": "",
+      "wix": {
+        "upgradeCode": "3ffe16e5-7a2b-5671-8979-24dc7af787a1"
+      }
     }
   }
 }

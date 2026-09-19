@@ -37,6 +37,7 @@ export interface LiveChannel {
   id: string
   name: string
   category: string
+  categoryOrder?: number | null
   epgChannelId?: string
   currentProgram: string
   nextProgram: string
@@ -51,9 +52,20 @@ export interface VodItem {
   durationLabel: string
   quality: string
   description: string
+  rating?: string | null
   imageUrl?: string | null
   streamUrl: string
   added?: number | null
+}
+
+export interface VodDetail {
+  vodId: string
+  description: string
+  durationLabel?: string | null
+  releasedAt?: string | null
+  imageUrl?: string | null
+  genre?: string | null
+  rating?: string | null
 }
 
 export interface SeriesItem {
@@ -63,6 +75,7 @@ export interface SeriesItem {
   seasonCount: number
   episodeCount: number
   description: string
+  rating?: string | null
   firstEpisodeTitle: string
   imageUrl?: string | null
   streamUrl: string
@@ -95,6 +108,7 @@ export interface SeriesEpisode {
 export interface SeriesDetail {
   seriesId: string
   title: string
+  rating?: string | null
   seasons: SeriesSeason[]
   episodesBySeason: Record<string, SeriesEpisode[]>
 }
@@ -174,11 +188,20 @@ export interface ResumeCheckpointRequest {
   progressPercent: number
 }
 
+export interface SeriesBrowseState {
+  category: string
+  seriesId: string
+  seasonNumber: number | null
+}
+
 export interface AppState {
   currentView: AppView
   previousView: AppView | null
   selectedProfileId: string
+  pendingLiveChannelId: string | null
+  pendingVodId: string | null
   pendingSeriesId: string | null
+  seriesBrowseState: SeriesBrowseState
   profiles: XtreamProfile[]
   favorites: FavoriteItem[]
   liveChannels: LiveChannel[]

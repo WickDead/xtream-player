@@ -260,6 +260,28 @@ dt {
   gap: 10px;
 }
 
+.provider-switcher {
+  display: grid;
+  gap: 4px;
+  min-width: 190px;
+  color: var(--text-muted);
+  font-size: 0.76rem;
+}
+
+.provider-switcher select {
+  padding: 0.62rem 0.9rem;
+  border: 1px solid var(--page-border);
+  border-radius: 999px;
+  background: var(--surface-1);
+  color: var(--text-strong);
+  font: inherit;
+}
+
+.list-row.active-provider-row {
+  border-color: rgba(255, 175, 97, 0.34);
+  background: rgba(255, 175, 97, 0.08);
+}
+
 .view-stack {
   display: grid;
   gap: 24px;
@@ -601,7 +623,8 @@ select:focus-visible {
 .list-stack {
   display: grid;
   gap: 14px;
-  overflow: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
   min-height: 0;
   padding-right: 8px;
 }
@@ -609,7 +632,8 @@ select:focus-visible {
 .selection-list {
   display: grid;
   gap: 12px;
-  overflow: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
   min-height: 0;
   padding-right: 8px;
 }
@@ -733,14 +757,83 @@ select:focus-visible {
   overflow: hidden;
 }
 
+.series-detail-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.series-season-picker {
+  flex: 0 0 auto;
+  max-height: 240px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 8px;
+}
+
+.series-episode-list {
+  flex: 1;
+  min-height: 180px;
+}
+
 .guide-hero {
   display: flex;
   justify-content: space-between;
+  align-items: flex-start;
   gap: 18px;
   padding: 18px;
   border-radius: 22px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: var(--surface-1);
+}
+
+.live-channel-row {
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.live-channel-row__copy {
+  width: 100%;
+  min-width: 0;
+}
+
+.live-channel-row__copy p,
+.live-channel-row__copy h3 {
+  overflow-wrap: anywhere;
+}
+
+.live-channel-row__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  width: 100%;
+  justify-content: flex-start;
+}
+
+.live-action-btn {
+  min-width: 0;
+  justify-content: center;
+  white-space: nowrap;
+}
+
+.live-action-btn--primary {
+  background: rgba(255, 175, 97, 0.16);
+  border-color: rgba(255, 175, 97, 0.28);
+}
+
+.live-guide-actions {
+  display: grid;
+  gap: 10px;
+  justify-items: end;
+  flex: 0 0 auto;
+}
+
+.live-guide-action-btn {
+  min-width: 194px;
+  justify-content: center;
+  white-space: nowrap;
 }
 
 .episode-row {
@@ -855,6 +948,50 @@ select:focus-visible {
 
 .poster-button.active {
   border-color: rgba(255, 175, 97, 0.4);
+}
+
+.vod-detail-hero {
+  display: grid;
+  grid-template-columns: 140px minmax(0, 1fr);
+  gap: 18px;
+  margin-top: 10px;
+  padding: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 18px;
+  background: var(--surface-1);
+}
+
+.vod-detail-hero__poster {
+  overflow: hidden;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: #050505;
+  aspect-ratio: 2 / 3;
+}
+
+.vod-detail-hero__poster img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.vod-detail-hero__copy {
+  display: grid;
+  gap: 14px;
+  align-content: start;
+  min-width: 0;
+}
+
+.vod-detail-hero__copy h3 {
+  color: var(--text-strong);
+  font-size: clamp(1.4rem, 2.2vw, 2rem);
+  line-height: 1.05;
+}
+
+.vod-detail-hero__copy p {
+  color: var(--text-muted);
+  max-width: 70ch;
 }
 
 .poster-art {
@@ -1122,10 +1259,24 @@ select:focus-visible {
 
 /* Embedded player */
 .player-view {
+  position: relative;
   display: flex;
   flex-direction: column;
   height: 100%;
   gap: 0;
+}
+
+.player-toast {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 5;
+  width: min(100%, 960px);
+  pointer-events: none;
+}
+
+.player-toast .status-banner {
+  margin-left: auto;
 }
 
 .player-embed {
@@ -1141,6 +1292,21 @@ select:focus-visible {
   height: 100%;
   object-fit: contain;
   background: #000;
+}
+
+.player-video-hidden {
+  opacity: 0;
+  pointer-events: none;
+
+.player-helper-copy {
+  max-width: 68ch;
+  color: var(--text-muted);
+  font-size: 0.88rem;
+}
+
+.external-player-picker {
+  width: min(100%, 220px);
+}
 }
 
 .player-controls-bar {
@@ -1199,10 +1365,26 @@ select:focus-visible {
 .audio-track-picker select {
   padding: 6px 10px;
   border-radius: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--page-border);
+  background: var(--surface-1);
   color: var(--text-strong);
   font-size: 0.82rem;
+  appearance: none;
+  color-scheme: dark;
+}
+
+.audio-track-picker select:focus-visible {
+  border-color: rgba(255, 175, 97, 0.48);
+  background: var(--surface-2);
+}
+
+.audio-track-picker select option {
+  background: var(--surface-1);
+  color: var(--text-strong);
+}
+
+.audio-track-picker select option:disabled {
+  color: var(--text-muted);
 }
 
 .player-info {
@@ -1221,6 +1403,58 @@ select:focus-visible {
   font-size: 0.82rem;
   color: var(--text-muted);
   text-transform: capitalize;
+}
+
+@media (max-width: 960px) {
+  .quick-grid,
+  .dashboard-grid,
+  .stats-grid,
+  .catalog-grid,
+  .hero-layout,
+  .split-layout,
+  .dual-grid,
+  .browse-layout,
+  .browse-layout-wide {
+    grid-template-columns: 1fr;
+  }
+
+  .vod-detail-hero {
+    grid-template-columns: 1fr;
+  }
+
+  .vod-detail-hero__poster {
+    width: min(180px, 100%);
+  }
+
+  .list-row {
+    flex-direction: column;
+  }
+
+  .live-channel-row__actions,
+  .live-guide-actions {
+    width: 100%;
+    justify-items: stretch;
+  }
+
+  .live-action-btn,
+  .live-guide-action-btn {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .guide-hero {
+    flex-direction: column;
+  }
+
+  .player-toast {
+    position: static;
+    width: 100%;
+    margin-bottom: 12px;
+  }
+
+  .player-toast .status-banner {
+    margin-left: 0;
+  }
 }
 
 @keyframes skeleton-shimmer {

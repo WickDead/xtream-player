@@ -16,6 +16,35 @@ interface SearchResult {
   action: () => void
 }
 
+function formatExpiryValue(value: string) {
+  const trimmed = value.trim()
+  if (!trimmed || /unknown|browser fallback/i.test(trimmed)) {
+    return 'Unknown'
+  }
+
+  if (/^\d+$/.test(trimmed)) {
+    const unixSeconds = Number(trimmed)
+    if (Number.isFinite(unixSeconds) && unixSeconds > 0) {
+      return new Date(unixSeconds * 1000).toLocaleDateString([], {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+      })
+    }
+  }
+
+  const parsed = new Date(trimmed)
+  if (!Number.isNaN(parsed.getTime())) {
+    return parsed.toLocaleDateString([], {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    })
+  }
+
+  return trimmed
+}
+
 export function DashboardPage({ state, dispatch }: DashboardPageProps) {
   const selectedProfile = getSelectedProfile(state)
   const [searchText, setSearchText] = useState('')
@@ -122,8 +151,46 @@ export function DashboardPage({ state, dispatch }: DashboardPageProps) {
     },
   ]
 
-  const recentContinueWatching = state.continueWatching.slice(0, 4)
   const recentFavorites = state.favorites.slice(0, 5)
+  const expiryValue = formatExpiryValue(selectedProfile.expiresAt || 'Unknown')
+
+  function navigateToFavorite(contentId: string, kind: 'live' | 'vod' | 'series') {
+    if (kind === 'live') {
+      const channel = state.liveChannels.find((item) => item.id === contentId)
+      if (channel) {
+        dispatch({
+          type: 'startPlayback',
+          session: {
+            title: channel.name,
+            streamUrl: channel.streamUrl,
+            streamType: 'live',
+            preferredEngine: 'Embedded mpv bridge',
+            fallbackBehavior: 'External VLC or mpv handoff',
+          },
+        })
+        return
+      }
+      dispatch({ type: 'navigate', view: 'live' })
+      return
+    }
+
+    if (kind === 'vod') {
+      const item = state.vodItems.find((entry) => entry.id === contentId)
+      if (item) {
+        dispatch({ type: 'navigateToVod', vodId: item.id })
+        return
+      }
+      dispatch({ type: 'navigate', view: 'vod' })
+      return
+    }
+
+    const series = state.seriesItems.find((entry) => entry.id === contentId)
+    if (series) {
+      dispatch({ type: 'navigateToSeries', seriesId: series.id })
+      return
+    }
+    dispatch({ type: 'navigate', view: 'series' })
+  }
 
   return (
     <div className="view-stack">
@@ -175,7 +242,7 @@ export function DashboardPage({ state, dispatch }: DashboardPageProps) {
           <dl className="compact-dl">
             <div><dt>Server</dt><dd>{selectedProfile.serverUrl || '—'}</dd></div>
             <div><dt>Status</dt><dd>{selectedProfile.status || 'Idle'}</dd></div>
-            <div><dt>Expiry</dt><dd>{selectedProfile.expiresAt || 'Unknown'}</dd></div>
+            <div><dt>Expiry</dt><dd>{expiryValue}</dd></div>
           </dl>
           <div className="hero-actions" style={{ marginTop: '14px' }}>
             <button type="button" className="primary-action" onClick={() => dispatch({ type: 'navigate', view: 'live' })}>
@@ -184,25 +251,6 @@ export function DashboardPage({ state, dispatch }: DashboardPageProps) {
             <button type="button" className="secondary-action" onClick={() => dispatch({ type: 'navigate', view: 'providers' })}>
               Manage providers
             </button>
-          </div>
-        </article>
-
-        <article className="panel">
-          <div className="panel-sticky-header panel-sticky-header--dense">
-            <p className="card-label">Continue watching</p>
-          </div>
-          <div className="list-stack" style={{ marginTop: '14px' }}>
-            {recentContinueWatching.length === 0 ? (
-              <div className="list-row list-row--compact">
-                <div><h3>No resume history yet</h3></div>
-              </div>
-            ) : null}
-            {recentContinueWatching.map((item) => (
-              <div key={item.id} className="list-row list-row--compact">
-                <div><h3>{item.title}</h3><p>{item.detail}</p></div>
-                <strong>{item.progressPercent}%</strong>
-              </div>
-            ))}
           </div>
         </article>
 
@@ -218,7 +266,19 @@ export function DashboardPage({ state, dispatch }: DashboardPageProps) {
               </div>
             ) : null}
             {recentFavorites.map((item) => (
-              <div key={item.id} className="list-row list-row--compact">
+              <div
+                key={item.id}
+                className="list-row list-row--compact"
+                role="button"
+                tabIndex={0}
+                onClick={() => navigateToFavorite(item.contentId, item.kind)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault()
+                    navigateToFavorite(item.contentId, item.kind)
+                  }
+                }}
+              >
                 <div><h3>{item.title}</h3></div>
                 <span className="pill">{item.kind}</span>
               </div>

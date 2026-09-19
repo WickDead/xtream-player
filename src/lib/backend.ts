@@ -16,10 +16,20 @@ import type {
   SeriesDetail,
   SaveProfileRequest,
   SeriesItem,
+  VodDetail,
   XmltvSnapshot,
   VodItem,
   XtreamProfile,
 } from '../types/xtream'
+
+type EmbeddedVlcBounds = {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+export type ExternalPlayerPreference = 'vlc' | 'mpv' | 'auto'
 
 function isTauriRuntime() {
   return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
@@ -94,6 +104,29 @@ export async function loadVodCatalog(profileId: string): Promise<VodItem[]> {
   }
 
   return invoke<VodItem[]>('fetch_vod_catalog', { profileId })
+}
+
+export async function loadVodDetail(
+  profileId: string,
+  vodId: string,
+): Promise<VodDetail> {
+  if (!isTauriRuntime()) {
+    const item = demoVodItems.find((entry) => entry.id === vodId)
+    if (!item) {
+      throw new Error('VOD detail not found in browser fallback mode.')
+    }
+
+    return {
+      vodId: item.id,
+      description: item.description,
+      durationLabel: item.durationLabel,
+      releasedAt: null,
+      imageUrl: item.imageUrl ?? null,
+      genre: item.genre,
+    }
+  }
+
+  return invoke<VodDetail>('fetch_vod_detail', { profileId, vodId })
 }
 
 export async function loadSeriesCatalog(profileId: string): Promise<SeriesItem[]> {
@@ -207,6 +240,52 @@ export async function startInternalPlayback(
   return invoke<PlayerStatus>('start_internal_playback', { title, streamUrl })
 }
 
+export async function resolveEmbeddedStreamUrl(streamUrl: string): Promise<string> {
+  if (!isTauriRuntime()) {
+    return streamUrl
+  }
+
+  return invoke<string>('resolve_embedded_stream_url', { streamUrl })
+}
+
+export async function startNativeVlcWindowPlayback(
+  title: string,
+  streamUrl: string,
+  bounds: EmbeddedVlcBounds,
+): Promise<PlayerStatus> {
+  if (!isTauriRuntime()) {
+    return {
+      preferredEngine: 'Browser fallback',
+      fallbackBehavior: 'Embedded VLC playback is unavailable outside Tauri',
+      activeTitle: title,
+      activeUrl: streamUrl,
+      paused: false,
+      transport: 'browser-fallback',
+      available: false,
+      executablePath: null,
+      lastError: 'The embedded VLC player is only available in the Tauri shell.',
+    }
+  }
+
+  return invoke<PlayerStatus>('start_native_vlc_window_playback', { title, streamUrl, bounds })
+}
+
+export async function syncEmbeddedVlcBounds(bounds: EmbeddedVlcBounds): Promise<void> {
+  if (!isTauriRuntime()) {
+    return
+  }
+
+  await invoke('sync_embedded_vlc_bounds', { bounds })
+}
+
+export async function cycleInternalAudioTrack(): Promise<PlayerStatus> {
+  if (!isTauriRuntime()) {
+    throw new Error('Internal playback is unavailable outside Tauri.')
+  }
+
+  return invoke<PlayerStatus>('cycle_internal_audio_track')
+}
+
 export async function toggleInternalPause(): Promise<PlayerStatus> {
   if (!isTauriRuntime()) {
     throw new Error('Internal playback is unavailable outside Tauri.')
@@ -231,12 +310,15 @@ export async function stopInternalPlayback(): Promise<PlayerStatus> {
   return invoke<PlayerStatus>('stop_internal_playback')
 }
 
-export async function openExternalPlayer(streamUrl: string): Promise<PlayerStatus> {
+export async function openExternalPlayer(
+  streamUrl: string,
+  preferredPlayer: ExternalPlayerPreference,
+): Promise<PlayerStatus> {
   if (!isTauriRuntime()) {
     throw new Error('External playback is unavailable outside Tauri.')
   }
 
-  return invoke<PlayerStatus>('open_external_player', { streamUrl })
+  return invoke<PlayerStatus>('open_external_player', { streamUrl, preferredPlayer })
 }
 
 export async function getPlayerStatus(): Promise<PlayerStatus> {

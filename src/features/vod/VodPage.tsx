@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { LoadingSkeleton } from '../../components/LoadingSkeleton'
 import { useHiddenCategories } from '../../hooks/useHiddenCategories'
-import { addFavorite, loadVodCatalog, removeFavorite } from '../../lib/backend'
+import { addFavorite, loadVodCatalog, loadVodDetail, removeFavorite } from '../../lib/backend'
 import type { AppAction } from '../../stores/appStore'
-import type { AppState, VodItem } from '../../types/xtream'
+import type { AppState, VodDetail, VodItem } from '../../types/xtream'
 
 const POSTER_BATCH_SIZE = 200
 
@@ -27,10 +27,21 @@ function startVodPlayback(dispatch: React.Dispatch<AppAction>, item: VodItem) {
   })
 }
 
+function formatRatingLabel(rating?: string | null) {
+  if (!rating) {
+    return null
+  }
+
+  return `${rating}/10`
+}
+
 export function VodPage({ state, dispatch, refreshBootstrap }: VodPageProps) {
   const [, setStatusMessage] = useState('')
   const [statusTone, setStatusTone] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
   const [selectedCategory, setSelectedCategory] = useState<string>('★ Favorites')
+  const [selectedItemId, setSelectedItemId] = useState<string | null>(null)
+  const [vodDetails, setVodDetails] = useState<Record<string, VodDetail>>({})
+  const [detailLoadingId, setDetailLoadingId] = useState<string | null>(null)
   const [filterText, setFilterText] = useState('')
   const [visibleLimit, setVisibleLimit] = useState(POSTER_BATCH_SIZE)
   const [showHidden, setShowHidden] = useState(false)
@@ -89,6 +100,19 @@ export function VodPage({ state, dispatch, refreshBootstrap }: VodPageProps) {
     return sorted
   }, [filteredItems, sortOrder])
   const displayedItems = visibleItems.slice(0, visibleLimit)
+  const activeItem = useMemo(() => {
+    if (visibleItems.length === 0) {
+      return null
+    }
+
+    return visibleItems.find((item) => item.id === selectedItemId) ?? visibleItems[0]
+  }, [selectedItemId, visibleItems])
+  const activeDetail = activeItem ? vodDetails[activeItem.id] ?? null : null
+  const activeDescription = activeDetail?.description?.trim() || activeItem?.description?.trim() || 'No description supplied by the provider for this title.'
+  const activeGenre = activeDetail?.genre?.trim() || activeItem?.genre || 'Uncategorized'
+  const activeDuration = activeDetail?.durationLabel?.trim() || activeItem?.durationLabel || 'Unknown length'
+  const activeImageUrl = activeDetail?.imageUrl ?? activeItem?.imageUrl ?? null
+  const activeRatingLabel = formatRatingLabel(activeDetail?.rating ?? activeItem?.rating)
 
   const sentinelRef = useRef<HTMLDivElement | null>(null)
   const observerRef = useRef<IntersectionObserver | null>(null)
@@ -127,6 +151,24 @@ export function VodPage({ state, dispatch, refreshBootstrap }: VodPageProps) {
   }, [activeCategory])
 
   useEffect(() => {
+    setVodDetails({})
+    setDetailLoadingId(null)
+  }, [state.selectedProfileId])
+
+  useEffect(() => {
+    if (visibleItems.length === 0) {
+      if (selectedItemId !== null) {
+        setSelectedItemId(null)
+      }
+      return
+    }
+
+    if (!selectedItemId || !visibleItems.some((item) => item.id === selectedItemId)) {
+      setSelectedItemId(visibleItems[0].id)
+    }
+  }, [selectedItemId, visibleItems])
+
+  useEffect(() => {
     if (
       !state.selectedProfileId ||
       autoLoadedProfileRef.current === state.selectedProfileId ||
@@ -138,6 +180,56 @@ export function VodPage({ state, dispatch, refreshBootstrap }: VodPageProps) {
     autoLoadedProfileRef.current = state.selectedProfileId
     void handleSync()
   }, [state.selectedProfileId, state.vodItems.length])
+
+  useEffect(() => {
+    if (state.pendingVodId && state.vodItems.length > 0) {
+      const target = state.vodItems.find((item) => item.id === state.pendingVodId)
+      if (target) {
+        setSelectedCategory(target.genre || '★ Favorites')
+        setSelectedItemId(target.id)
+      }
+      dispatch({ type: 'navigate', view: 'vod' })
+    }
+  }, [dispatch, state.pendingVodId, state.vodItems])
+
+  useEffect(() => {
+    if (!state.selectedProfileId || !activeItem || vodDetails[activeItem.id]) {
+      return
+    }
+
+    let cancelled = false
+    const activeId = activeItem.id
+
+    setDetailLoadingId(activeId)
+
+    void loadVodDetail(state.selectedProfileId, activeId)
+      .then((detail) => {
+        if (cancelled) {
+          return
+        }
+
+        setVodDetails((current) => ({
+          ...current,
+          [activeId]: detail,
+        }))
+      })
+      .catch(() => {
+        if (cancelled) {
+          return
+        }
+      })
+      .finally(() => {
+        if (cancelled) {
+          return
+        }
+
+        setDetailLoadingId((current) => (current === activeId ? null : current))
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [activeItem, state.selectedProfileId, vodDetails])
 
   async function handleFavoriteToggle(item: VodItem) {
     const favoriteId = favoriteIds.get(item.id)
@@ -249,11 +341,61 @@ export function VodPage({ state, dispatch, refreshBootstrap }: VodPageProps) {
                 Showing {Math.min(displayedItems.length, visibleItems.length)} of {visibleItems.length} titles.
               </p>
             ) : null}
+            {activeItem ? (
+              <section className="vod-detail-hero" aria-label="Selected movie details">
+                <div className="vod-detail-hero__poster">
+                  {activeImageUrl ? (
+                    <img src={activeImageUrl} alt={`${activeItem.title} poster`} loading="lazy" />
+                  ) : (
+                    <div className="poster-fallback">
+                      <span>{activeGenre}</span>
+                      <strong>{activeItem.title}</strong>
+                    </div>
+                  )}
+                </div>
+                <div className="vod-detail-hero__copy">
+                  <div className="stack" style={{ gap: '10px' }}>
+                    <div className="pill-row">
+                      <span className="pill">{activeGenre}</span>
+                      {activeRatingLabel ? <span className="pill">Rating {activeRatingLabel}</span> : null}
+                      <span className="pill">{activeDuration}</span>
+                      <span className="pill">{activeItem.quality}</span>
+                      {activeDetail?.releasedAt ? <span className="pill">{activeDetail.releasedAt}</span> : null}
+                    </div>
+                    <h3>{activeItem.title}</h3>
+                    <p>
+                      {detailLoadingId === activeItem.id && !activeDetail ? 'Loading synopsis...' : activeDescription}
+                    </p>
+                  </div>
+                  <div className="poster-actions">
+                    <button
+                      type="button"
+                      className="poster-action-btn"
+                      onClick={() => startVodPlayback(dispatch, activeItem)}
+                    >
+                      ▶ Play
+                    </button>
+                    <button
+                      type="button"
+                      className="poster-action-btn"
+                      onClick={() => handleFavoriteToggle(activeItem)}
+                    >
+                      {favoriteIds.has(activeItem.id) ? '★ Unfav' : '☆ Fav'}
+                    </button>
+                  </div>
+                </div>
+              </section>
+            ) : null}
           </div>
           <div className="poster-grid" style={{ marginTop: '18px' }}>
         {isInitialCatalogLoading ? <LoadingSkeleton variant="poster" count={8} /> : null}
         {!isInitialCatalogLoading && displayedItems.map((item) => (
-          <article key={item.id} className="poster-card">
+          <button
+            key={item.id}
+            type="button"
+            className={item.id === activeItem?.id ? 'poster-card poster-button active' : 'poster-card poster-button'}
+            onClick={() => setSelectedItemId(item.id)}
+          >
             <div className="poster-art">
               {item.imageUrl ? (
                 <img src={item.imageUrl} alt={`${item.title} poster`} loading="lazy" />
@@ -268,25 +410,10 @@ export function VodPage({ state, dispatch, refreshBootstrap }: VodPageProps) {
                   <h3>{item.title}</h3>
                   <p>{item.durationLabel}</p>
                 </div>
-                <div className="poster-actions">
-                  <button
-                    type="button"
-                    className="poster-action-btn"
-                    onClick={() => startVodPlayback(dispatch, item)}
-                  >
-                    ▶ Play
-                  </button>
-                  <button
-                    type="button"
-                    className="poster-action-btn"
-                    onClick={() => handleFavoriteToggle(item)}
-                  >
-                    {favoriteIds.has(item.id) ? '★ Unfav' : '☆ Fav'}
-                  </button>
-                </div>
+                <span className="pill">Click for details</span>
               </div>
             </div>
-          </article>
+          </button>
         ))}
         {!isInitialCatalogLoading && categories.length > 0 && visibleItems.length === 0 ? (
           <div className="list-row" style={{ marginTop: '18px' }}>

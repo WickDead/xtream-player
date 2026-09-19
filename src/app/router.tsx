@@ -11,16 +11,17 @@ interface AppRouterProps {
   state: AppState
   dispatch: React.Dispatch<AppAction>
   refreshBootstrap: () => Promise<void>
+  onSelectProfile: (profileId: string) => void
 }
 
-export function AppRouter({ state, dispatch, refreshBootstrap }: AppRouterProps) {
+export function AppRouter({ state, dispatch, refreshBootstrap, onSelectProfile }: AppRouterProps) {
   switch (state.currentView) {
     case 'providers':
       return (
         <LoginPage
           state={state}
-          dispatch={dispatch}
           refreshBootstrap={refreshBootstrap}
+          onSelectProfile={onSelectProfile}
         />
       )
     case 'live':

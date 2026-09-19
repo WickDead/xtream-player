@@ -12,7 +12,8 @@ use uuid::Uuid;
 use crate::{
     models::{
         BootstrapState, EpgListing, LiveChannel, ProviderPreview, ResumeCheckpointRequest,
-        SaveProfileRequest, SeriesDetail, SeriesEpisode, SeriesItem, SeriesSeason, VodItem,
+        SaveProfileRequest, SeriesDetail, SeriesEpisode, SeriesItem, SeriesSeason, VodDetail,
+        VodItem,
         XmltvSnapshot, XtreamProfile,
     },
     persistence::sqlite,
@@ -114,8 +115,28 @@ impl XtreamClient {
             .collect())
     }
 
+    async fn ordered_category_map(
+        &self,
+        action: &str,
+    ) -> Result<HashMap<String, (String, i64)>, XtreamError> {
+        let categories = self.fetch_player_api::<Vec<RawCategory>>(Some(action)).await?;
+
+        Ok(categories
+            .into_iter()
+            .enumerate()
+            .filter_map(|(index, category)| {
+                let id = category.category_id?;
+                let name = category.category_name.unwrap_or_else(|| "Uncategorized".into());
+                Some((id, (name, index as i64)))
+            })
+            .collect())
+    }
+
     async fn live_catalog(&self) -> Result<Vec<LiveChannel>, XtreamError> {
-        let categories = self.category_map("get_live_categories").await.unwrap_or_default();
+        let categories = self
+            .ordered_category_map("get_live_categories")
+            .await
+            .unwrap_or_default();
         let auth = self.authenticate().await?;
         let allowed_formats = auth
             .user_info
@@ -132,29 +153,35 @@ impl XtreamClient {
 
         Ok(streams
             .into_iter()
-            .map(|stream| LiveChannel {
-                id: stream.stream_id.clone().unwrap_or_else(|| Uuid::new_v4().to_string()),
-                name: stream.name.unwrap_or_else(|| "Untitled live stream".into()),
-                category: stream
+            .map(|stream| {
+                let category_entry = stream
                     .category_id
                     .as_ref()
-                    .and_then(|id| categories.get(id).cloned())
-                    .unwrap_or_else(|| "Uncategorized".into()),
-                epg_channel_id: stream.epg_channel_id,
-                current_program: "Use short EPG sync for now/next".into(),
-                next_program: "Full XMLTV parsing is planned next".into(),
-                bitrate_label: stream
-                    .bitrate
-                    .map(|value| format!("{} kbps", value))
-                    .unwrap_or_else(|| "Unknown bitrate".into()),
-                stream_url: format!(
-                    "{}/live/{}/{}/{}.{}",
-                    self.base_url,
-                    self.username,
-                    self.password,
-                    stream.stream_id.unwrap_or_else(|| "0".into()),
-                    preferred_ext
-                ),
+                    .and_then(|id| categories.get(id));
+
+                LiveChannel {
+                    id: stream.stream_id.clone().unwrap_or_else(|| Uuid::new_v4().to_string()),
+                    name: stream.name.unwrap_or_else(|| "Untitled live stream".into()),
+                    category: category_entry
+                        .map(|(name, _)| name.clone())
+                        .unwrap_or_else(|| "Uncategorized".into()),
+                    category_order: category_entry.map(|(_, order)| *order),
+                    epg_channel_id: stream.epg_channel_id,
+                    current_program: "Use short EPG sync for now/next".into(),
+                    next_program: "Full XMLTV parsing is planned next".into(),
+                    bitrate_label: stream
+                        .bitrate
+                        .map(|value| format!("{} kbps", value))
+                        .unwrap_or_else(|| "Unknown bitrate".into()),
+                    stream_url: format!(
+                        "{}/live/{}/{}/{}.{}",
+                        self.base_url,
+                        self.username,
+                        self.password,
+                        stream.stream_id.unwrap_or_else(|| "0".into()),
+                        preferred_ext
+                    ),
+                }
             })
             .collect())
     }
@@ -227,7 +254,11 @@ impl XtreamClient {
                         .unwrap_or_else(|| "Uncategorized".into()),
                     duration_label: stream.duration.unwrap_or_else(|| "Unknown length".into()),
                     quality: extension.to_uppercase(),
-                    description: stream.plot.unwrap_or_else(|| "No synopsis supplied.".into()),
+                    description: stream
+                        .plot
+                        .or(stream.description)
+                        .unwrap_or_else(|| "No synopsis supplied.".into()),
+                    rating: normalize_optional_rating(stream.rating),
                     image_url: stream.stream_icon,
                     stream_url: format!(
                         "{}/movie/{}/{}/{}.{}",
@@ -237,6 +268,68 @@ impl XtreamClient {
                 }
             })
             .collect())
+    }
+
+    async fn vod_detail(&self, vod_id: &str) -> Result<VodDetail, XtreamError> {
+        let payload = self
+            .client
+            .get(format!("{}/player_api.php", self.base_url))
+            .query(&[
+                ("username", self.username.as_str()),
+                ("password", self.password.as_str()),
+                ("action", "get_vod_info"),
+                ("vod_id", vod_id),
+            ])
+            .send()
+            .await?
+            .error_for_status()?
+            .json::<RawVodInfoPayload>()
+            .await?;
+
+        let description = payload
+            .info
+            .as_ref()
+            .and_then(|info| info.plot.clone().or_else(|| info.description.clone()))
+            .or_else(|| {
+                payload
+                    .movie_data
+                    .as_ref()
+                    .and_then(|entry| entry.plot.clone().or_else(|| entry.description.clone()))
+            })
+            .unwrap_or_else(|| "No synopsis supplied.".into());
+
+        let duration_label = payload
+            .info
+            .as_ref()
+            .and_then(|info| info.duration.clone());
+        let released_at = payload
+            .info
+            .as_ref()
+            .and_then(|info| info.releasedate.clone());
+        let image_url = payload
+            .info
+            .as_ref()
+            .and_then(|info| info.cover_big.clone().or_else(|| info.movie_image.clone()));
+        let genre = payload
+            .info
+            .as_ref()
+            .and_then(|info| info.genre.clone());
+        let rating = payload
+            .info
+            .as_ref()
+            .and_then(|info| info.rating.clone())
+            .or_else(|| payload.movie_data.as_ref().and_then(|entry| entry.rating.clone()))
+            .and_then(normalize_rating);
+
+        Ok(VodDetail {
+            vod_id: vod_id.to_string(),
+            description,
+            duration_label,
+            released_at,
+            image_url,
+            genre,
+            rating,
+        })
     }
 
     async fn series_catalog(&self) -> Result<Vec<SeriesItem>, XtreamError> {
@@ -258,6 +351,7 @@ impl XtreamClient {
                 season_count: entry.seasons.unwrap_or(0),
                 episode_count: entry.episodes.unwrap_or(0),
                 description: entry.plot.unwrap_or_else(|| "No synopsis supplied.".into()),
+                rating: normalize_optional_rating(entry.rating),
                 first_episode_title: "Load series info for episodes".into(),
                 image_url: entry.cover,
                 stream_url: String::new(),
@@ -287,6 +381,11 @@ impl XtreamClient {
             .as_ref()
             .and_then(|info| info.name.clone())
             .unwrap_or_else(|| "Untitled series".into());
+        let rating = payload
+            .info
+            .as_ref()
+            .and_then(|info| info.rating.clone())
+            .and_then(normalize_rating);
 
         let mut seasons = payload
             .seasons
@@ -397,6 +496,7 @@ impl XtreamClient {
         Ok(SeriesDetail {
             series_id: series_id.to_string(),
             title,
+            rating,
             seasons,
             episodes_by_season,
         })
@@ -561,6 +661,20 @@ pub async fn fetch_vod_catalog(
 }
 
 #[tauri::command]
+pub async fn fetch_vod_detail(
+    profile_id: String,
+    vod_id: String,
+    state: State<'_, AppState>,
+) -> Result<VodDetail, String> {
+    let profile = sqlite::get_profile_credentials(&state.db_path, &profile_id)
+        .map_err(|error| error.to_string())?;
+    let client = XtreamClient::new(&profile.server_url, &profile.username, &profile.password)
+        .map_err(|error| error.to_string())?;
+
+    client.vod_detail(&vod_id).await.map_err(|error| error.to_string())
+}
+
+#[tauri::command]
 pub async fn fetch_series_catalog(
     profile_id: String,
     state: State<'_, AppState>,
@@ -708,6 +822,10 @@ struct RawVodStream {
     #[serde(default, deserialize_with = "deserialize_optional_string")]
     plot: Option<String>,
     #[serde(default, deserialize_with = "deserialize_optional_string")]
+    description: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_optional_string")]
+    rating: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_optional_string")]
     duration: Option<String>,
     #[serde(default, deserialize_with = "deserialize_optional_string")]
     container_extension: Option<String>,
@@ -715,6 +833,44 @@ struct RawVodStream {
     stream_icon: Option<String>,
     #[serde(default, deserialize_with = "deserialize_optional_string")]
     added: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct RawVodInfoPayload {
+    #[serde(default)]
+    info: Option<RawVodInfo>,
+    #[serde(default)]
+    movie_data: Option<RawVodInfoMovieData>,
+}
+
+#[derive(Debug, Deserialize)]
+struct RawVodInfo {
+    #[serde(default, deserialize_with = "deserialize_optional_string")]
+    plot: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_optional_string")]
+    description: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_optional_string")]
+    duration: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_optional_string")]
+    releasedate: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_optional_string")]
+    movie_image: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_optional_string")]
+    cover_big: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_optional_string")]
+    genre: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_optional_string")]
+    rating: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct RawVodInfoMovieData {
+    #[serde(default, deserialize_with = "deserialize_optional_string")]
+    plot: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_optional_string")]
+    description: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_optional_string")]
+    rating: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -727,6 +883,8 @@ struct RawSeriesStream {
     category_id: Option<String>,
     #[serde(default, deserialize_with = "deserialize_optional_string")]
     plot: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_optional_string")]
+    rating: Option<String>,
     #[serde(default, deserialize_with = "deserialize_optional_i64")]
     seasons: Option<i64>,
     #[serde(default, deserialize_with = "deserialize_optional_i64")]
@@ -751,6 +909,8 @@ struct RawSeriesInfoPayload {
 struct RawSeriesInfoSummary {
     #[serde(default, deserialize_with = "deserialize_optional_string")]
     name: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_optional_string")]
+    rating: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -850,6 +1010,28 @@ where
         Some(Value::String(text)) => text.parse::<i64>().ok(),
         _ => None,
     })
+}
+
+fn normalize_rating(value: String) -> Option<String> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    let parsed = trimmed.parse::<f64>().ok()?;
+    if parsed <= 0.0 {
+        return None;
+    }
+
+    if (parsed.fract()).abs() < f64::EPSILON {
+        Some(format!("{:.0}", parsed))
+    } else {
+        Some(format!("{:.1}", parsed))
+    }
+}
+
+fn normalize_optional_rating(value: Option<String>) -> Option<String> {
+    value.and_then(normalize_rating)
 }
 
 fn deserialize_string_list<'de, D>(deserializer: D) -> Result<Option<Vec<String>>, D::Error>

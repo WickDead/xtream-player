@@ -36,12 +36,12 @@ export const demoProfiles: XtreamProfile[] = [
 export const demoLiveChannels: LiveChannel[] = [
   {
     id: 'live-1',
-    name: 'XtreamPlayer Sports 4K',
+    name: 'Open Sports 4K',
     category: 'Sports',
     currentProgram: 'West Coast Cup Final',
     nextProgram: 'Post-match analysis',
     bitrateLabel: '12.4 Mbps',
-    streamUrl: 'https://iptv.example.com/live/xtreamplayer-sports.ts',
+    streamUrl: 'https://iptv.example.com/live/open-sports.ts',
   },
   {
     id: 'live-2',
@@ -216,7 +216,7 @@ export const demoFavorites: FavoriteItem[] = [
   {
     id: 'fav-1',
     contentId: 'live-1',
-    title: 'XtreamPlayer Sports 4K',
+    title: 'Open Sports 4K',
     kind: 'live',
   },
   {
