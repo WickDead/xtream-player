@@ -13,8 +13,22 @@ public sealed class PlaybackPreferences
     /// </summary>
     public IReadOnlyList<string> PreferredAudioLanguages { get; set; } = ["eng", "en"];
 
-    /// <summary>Empty means "leave subtitles off", which is the default.</summary>
+    /// <summary>
+    /// Empty means no preferred subtitle language. Combined with
+    /// <see cref="SubtitlesOffByDefault"/> that means subtitles stay off.
+    /// </summary>
     public IReadOnlyList<string> PreferredSubtitleLanguages { get; set; } = [];
+
+    /// <summary>
+    /// Explicitly disable subtitles when no preferred language matches.
+    /// </summary>
+    /// <remarks>
+    /// Required, not cosmetic. libvlc honours the container's default-track
+    /// flag, so many MKVs start with burned-in-looking subtitles nobody asked
+    /// for — observed on a real provider movie where English subs came on by
+    /// themselves. Leaving libvlc's default alone is NOT the same as "off".
+    /// </remarks>
+    public bool SubtitlesOffByDefault { get; set; } = true;
 
     /// <summary>Live streams need a much larger buffer than VOD.</summary>
     public int LiveNetworkCachingMs { get; set; } = 3000;
@@ -441,23 +455,32 @@ public sealed class VlcPlaybackService : IPlaybackService
             _preferences.PreferredAudioLanguages,
             SetAudioTrack);
 
-        if (_preferences.PreferredSubtitleLanguages.Count > 0)
-        {
-            ApplyPreferred(
-                SubtitleTracks.Where(t => t.Id >= 0).ToList(),
+        var selectableSubtitles = SubtitleTracks.Where(t => t.Id >= 0).ToList();
+
+        if (_preferences.PreferredSubtitleLanguages.Count > 0
+            && ApplyPreferred(
+                selectableSubtitles,
                 _preferences.PreferredSubtitleLanguages,
-                SetSubtitleTrack);
+                SetSubtitleTrack))
+        {
+            return;
+        }
+
+        if (_preferences.SubtitlesOffByDefault && SelectedSubtitleTrackId >= 0)
+        {
+            SetSubtitleTrack(-1);
         }
     }
 
-    private static void ApplyPreferred(
+    /// <returns>true when a preferred track was selected.</returns>
+    private static bool ApplyPreferred(
         IReadOnlyList<TrackOption> tracks,
         IReadOnlyList<string> preferredLanguages,
         Action<int> select)
     {
-        if (tracks.Count < 2 || preferredLanguages.Count == 0)
+        if (tracks.Count == 0 || preferredLanguages.Count == 0)
         {
-            return;
+            return false;
         }
 
         // 1. The track's own language tag — the correct signal.
@@ -465,11 +488,14 @@ public sealed class VlcPlaybackService : IPlaybackService
         {
             foreach (var track in tracks)
             {
+                // Containers are inconsistent: the same MKV can report
+                // "English" for one track and "chi"/"tur" for the next, so
+                // match on prefix rather than equality.
                 if (track.Language is { } tag
                     && tag.StartsWith(language, StringComparison.OrdinalIgnoreCase))
                 {
                     select(track.Id);
-                    return;
+                    return true;
                 }
             }
         }
@@ -482,12 +508,13 @@ public sealed class VlcPlaybackService : IPlaybackService
                 if (track.Label.Contains(language, StringComparison.OrdinalIgnoreCase))
                 {
                     select(track.Id);
-                    return;
+                    return true;
                 }
             }
         }
 
         // 3. Otherwise leave libvlc's default alone.
+        return false;
     }
 
     /// <summary>
