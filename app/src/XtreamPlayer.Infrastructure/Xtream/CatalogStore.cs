@@ -1,4 +1,4 @@
-using System.IO.Compression;
+﻿using System.IO.Compression;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using XtreamPlayer.Core.Models;
@@ -180,6 +180,31 @@ public sealed class CatalogStore(
         {
             var result = await fetch().ConfigureAwait(false);
 
+            // A 200 carrying an empty array is not an exception, so this would
+            // otherwise sail through as a legitimate catalog. Observed for real:
+            // a refresh came back with 104 live categories and zero streams, and
+            // that nothing was then cached over eleven thousand channels and
+            // served for the next twelve hours.
+            //
+            // Losing every item is a provider hiccup, never a real change. A
+            // provider that genuinely has none was empty last time too.
+            if (result.Items.Count == 0 && previous.Items.Count > 0)
+            {
+                log.LogWarning(
+                    "{Label} came back empty ({Categories} categories, 0 items); "
+                  + "keeping the previous {Count}.",
+                    label, result.Categories.Count, previous.Items.Count);
+
+                Progress?.Invoke(this, new CatalogProgress
+                {
+                    Kind = kind,
+                    Message = $"{label} came back empty; kept the previous copy",
+                    IsComplete = true,
+                });
+
+                return previous;
+            }
+
             log.LogInformation("Loaded {Count} {Label} in {Categories} categories.",
                 result.Items.Count, label, result.Categories.Count);
 
@@ -267,8 +292,48 @@ public sealed class CatalogStore(
     private static string CacheDirectory(Profile profile) =>
         Path.Combine(DatabasePaths.CacheDirectory, profile.Id);
 
+    /// <summary>
+    /// Bumped whenever the cached shape gains a field.
+    /// </summary>
+    /// <remarks>
+    /// The cache is our own serialisation of the catalog records, so an older
+    /// file still deserialises after a new field is added — silently, with that
+    /// field null. Versioning the name means a new build refetches once instead
+    /// of showing blanks until the TTL happens to expire.
+    /// </remarks>
+    private const int CacheVersion = 2;
+
     private static string CacheFile(Profile profile, CatalogKind kind) =>
-        Path.Combine(CacheDirectory(profile), $"{kind.ToString().ToLowerInvariant()}.json.gz");
+        Path.Combine(
+            CacheDirectory(profile),
+            $"{kind.ToString().ToLowerInvariant()}.v{CacheVersion}.json.gz");
+
+    private async Task WriteIfPopulatedAsync<T>(
+        Profile profile, CatalogKind kind, Catalog<T> catalog, CancellationToken ct)
+    {
+        var path = CacheFile(profile, kind);
+
+        if (catalog.Items.Count == 0)
+        {
+            // Clear a stale file rather than leaving an older copy that would be
+            // served as if it were current.
+            if (File.Exists(path))
+            {
+                try
+                {
+                    File.Delete(path);
+                }
+                catch (IOException)
+                {
+                    // Will be overwritten on the next successful fetch.
+                }
+            }
+
+            return;
+        }
+
+        await WriteAsync(path, catalog, ct).ConfigureAwait(false);
+    }
 
     private async Task<bool> TryLoadFromDiskAsync(Profile profile, CancellationToken ct)
     {
@@ -281,19 +346,27 @@ public sealed class CatalogStore(
             var series = await ReadAsync<Catalog<SeriesItem>>(CacheFile(profile, CatalogKind.Series), ct)
                 .ConfigureAwait(false);
 
-            if (live is null && vod is null && series is null)
+            // Every catalog, not any: a missing file means that catalog was
+            // never cached, and treating the set as usable serves it as empty
+            // until the TTL expires. Live disappearing while VOD and series
+            // stayed fresh is exactly how that shows up.
+            if (live is null || vod is null || series is null)
             {
+                log.LogInformation(
+                    "Catalog cache incomplete (live={Live}, vod={Vod}, series={Series}); refetching.",
+                    live is not null, vod is not null, series is not null);
+
                 return false;
             }
 
             Current = new CatalogState
             {
-                Live = live ?? Catalog<LiveChannel>.Empty,
-                Vod = vod ?? Catalog<VodItem>.Empty,
-                Series = series ?? Catalog<SeriesItem>.Empty,
+                Live = live,
+                Vod = vod,
+                Series = series,
                 ProfileId = profile.Id,
                 // The oldest snapshot decides staleness.
-                LoadedAt = new[] { live?.LoadedAt, vod?.LoadedAt, series?.LoadedAt }
+                LoadedAt = new DateTimeOffset?[] { live.LoadedAt, vod.LoadedAt, series.LoadedAt }
                     .Where(d => d is not null)
                     .Min(),
             };
@@ -328,9 +401,12 @@ public sealed class CatalogStore(
         {
             Directory.CreateDirectory(CacheDirectory(profile));
 
-            await WriteAsync(CacheFile(profile, CatalogKind.Live), Current.Live, ct).ConfigureAwait(false);
-            await WriteAsync(CacheFile(profile, CatalogKind.Vod), Current.Vod, ct).ConfigureAwait(false);
-            await WriteAsync(CacheFile(profile, CatalogKind.Series), Current.Series, ct).ConfigureAwait(false);
+            // An empty catalog is never worth caching. Writing one only means
+            // serving nothing until the TTL expires, when refetching it costs a
+            // single request.
+            await WriteIfPopulatedAsync(profile, CatalogKind.Live, Current.Live, ct).ConfigureAwait(false);
+            await WriteIfPopulatedAsync(profile, CatalogKind.Vod, Current.Vod, ct).ConfigureAwait(false);
+            await WriteIfPopulatedAsync(profile, CatalogKind.Series, Current.Series, ct).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {

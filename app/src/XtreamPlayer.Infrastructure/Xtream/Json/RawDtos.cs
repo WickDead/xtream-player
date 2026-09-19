@@ -1,4 +1,4 @@
-using System.Text.Json.Serialization;
+﻿using System.Text.Json.Serialization;
 
 namespace XtreamPlayer.Infrastructure.Xtream.Json;
 
@@ -190,6 +190,18 @@ public sealed class RawSeries
     [JsonPropertyName("last_modified")]
     [JsonConverter(typeof(UnixSecondsConverter))]
     public DateTimeOffset? LastModified { get; set; }
+
+    // Providers send one, the other, or both. The live provider sends both with
+    // the same value; some send only the snake_case form.
+    [JsonPropertyName("releaseDate")]
+    public string? ReleaseDate { get; set; }
+
+    [JsonPropertyName("release_date")]
+    public string? ReleaseDateAlternate { get; set; }
+
+    /// <summary>Whichever spelling the provider actually filled in.</summary>
+    public string? AnyReleaseDate =>
+        string.IsNullOrWhiteSpace(ReleaseDate) ? ReleaseDateAlternate : ReleaseDate;
 }
 
 public sealed class RawSeriesInfoResponse
@@ -215,6 +227,18 @@ public sealed class RawSeriesInfo
     [JsonPropertyName("backdrop_path")]
     [JsonConverter(typeof(LenientStringListConverter))]
     public List<string>? BackdropPath { get; set; }
+
+    // Providers send one, the other, or both. The live provider sends both with
+    // the same value; some send only the snake_case form.
+    [JsonPropertyName("releaseDate")]
+    public string? ReleaseDate { get; set; }
+
+    [JsonPropertyName("release_date")]
+    public string? ReleaseDateAlternate { get; set; }
+
+    /// <summary>Whichever spelling the provider actually filled in.</summary>
+    public string? AnyReleaseDate =>
+        string.IsNullOrWhiteSpace(ReleaseDate) ? ReleaseDateAlternate : ReleaseDate;
 }
 
 public sealed class RawSeason

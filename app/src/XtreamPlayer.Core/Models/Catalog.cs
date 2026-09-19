@@ -1,4 +1,4 @@
-namespace XtreamPlayer.Core.Models;
+﻿namespace XtreamPlayer.Core.Models;
 
 /// <summary>A provider category, in the provider's own ordering.</summary>
 public sealed record Category
@@ -87,6 +87,10 @@ public sealed record SeriesItem
     public string? Plot { get; init; }
     public string? Genre { get; init; }
     public string? Rating { get; init; }
+
+    /// <summary>First air year, when the provider gives one.</summary>
+    public int? Year { get; init; }
+
     public DateTimeOffset? LastModified { get; init; }
 }
 
@@ -123,6 +127,9 @@ public sealed record SeriesDetail
     public string? PosterUrl { get; init; }
     public string? BackdropUrl { get; init; }
     public string? Rating { get; init; }
+
+    /// <summary>First air year, when the provider gives one.</summary>
+    public int? Year { get; init; }
 
     public IReadOnlyList<SeriesSeason> Seasons { get; init; } = [];
 

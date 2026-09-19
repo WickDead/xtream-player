@@ -1,4 +1,4 @@
-<UserControl xmlns="https://github.com/avaloniaui"
+﻿<UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="clr-namespace:XtreamPlayer.App.ViewModels"
              xmlns:media="clr-namespace:XtreamPlayer.App.Media"
@@ -32,7 +32,11 @@
           <Button Command="{Binding ToggleFavoriteCommand}"
                   Foreground="{Binding IsFavorite, Converter={x:Static vm:FavoriteBrushConverter.Instance}}"
                   Content="{Binding IsFavorite, Converter={x:Static vm:StarGlyphConverter.Instance}}" />
+          <Button Content="Download" Command="{Binding DownloadCommand}" />
         </StackPanel>
+
+        <TextBlock Classes="muted" Text="{Binding DownloadStatus}"
+                   IsVisible="{Binding DownloadStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
 
         <TextBlock Text="{Binding Detail.Plot}" TextWrapping="Wrap" TextTrimming="None"
                    Foreground="{DynamicResource TextSecondary}" LineHeight="21" />

@@ -1,7 +1,8 @@
-<UserControl xmlns="https://github.com/avaloniaui"
+﻿<UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="clr-namespace:XtreamPlayer.App.ViewModels"
              xmlns:ctl="clr-namespace:XtreamPlayer.App.Controls"
+             xmlns:lib="clr-namespace:XtreamPlayer.Core.Library;assembly=XtreamPlayer.Core"
              x:Class="XtreamPlayer.App.Views.GuidePage"
              x:DataType="vm:GuidePageViewModel">
 
@@ -24,8 +25,24 @@
           </ComboBox.ItemTemplate>
         </ComboBox>
 
-        <CheckBox Grid.Column="2" Content="Favorites only" Margin="8,0"
-                  IsChecked="{Binding FavoritesOnly, Mode=TwoWay}" />
+        <!--
+          The same rail Live uses, carrying Favorites as a pseudo-category rather
+          than a separate checkbox, so one control answers "which channels".
+        -->
+        <ComboBox Grid.Column="2" Margin="8,0" MinWidth="200" MaxDropDownHeight="420"
+                  ItemsSource="{Binding Categories}"
+                  SelectedItem="{Binding SelectedCategory, Mode=TwoWay}"
+                  ToolTip.Tip="Which channels the guide shows">
+          <ComboBox.ItemTemplate>
+            <DataTemplate x:DataType="lib:CategoryRow">
+              <Grid ColumnDefinitions="*,Auto" MinWidth="180">
+                <TextBlock Grid.Column="0" Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+                <TextBlock Grid.Column="1" Classes="muted" Margin="10,0,0,0"
+                           Text="{Binding Count}" />
+              </Grid>
+            </DataTemplate>
+          </ComboBox.ItemTemplate>
+        </ComboBox>
 
         <TextBlock Grid.Column="3" Classes="muted" VerticalAlignment="Center" Margin="14,0"
                    Text="{Binding MatchSummary}" />

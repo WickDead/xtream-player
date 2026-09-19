@@ -1,10 +1,11 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using XtreamPlayer.Core.Abstractions;
 using XtreamPlayer.Core.Library;
 using XtreamPlayer.Core.Models;
 using XtreamPlayer.Core.Navigation;
+using XtreamPlayer.Infrastructure.Downloads;
 using XtreamPlayer.Infrastructure.Xtream;
 
 namespace XtreamPlayer.App.ViewModels;
@@ -15,7 +16,9 @@ public sealed partial class VodDetailPageViewModel(
     IResumeRepository resume,
     IProfileRepository profiles,
     ISettingsRepository settings,
-    INavigationService navigation) : PageViewModelBase
+    INavigationService navigation,
+    IDownloadManager downloads,
+    IDownloadPaths downloadPaths) : PageViewModelBase
 {
     [ObservableProperty]
     private VodItem? _item;
@@ -117,6 +120,41 @@ public sealed partial class VodDetailPageViewModel(
             Detail?.Genre))).ConfigureAwait(false);
     }
 
+    /// <summary>Queues the movie for offline viewing.</summary>
+    [RelayCommand]
+    private async Task DownloadAsync()
+    {
+        if (Item is null)
+        {
+            return;
+        }
+
+        var profile = await ActiveProfileAsync(CancellationToken.None).ConfigureAwait(true);
+
+        if (profile is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var target = await downloadPaths.ForMovieAsync(Item).ConfigureAwait(true);
+
+            await downloads.EnqueueAsync(
+                new ProfileScope(profile.Id), ContentKind.Vod, Item.Id, Item.Name,
+                Item.StreamUrl, target).ConfigureAwait(true);
+
+            DownloadStatus = "Added to downloads.";
+        }
+        catch (Exception ex)
+        {
+            DownloadStatus = $"Could not start the download: {ex.Message}";
+        }
+    }
+
+    [ObservableProperty]
+    private string? _downloadStatus;
+
     [RelayCommand]
     private async Task ToggleFavoriteAsync()
     {
@@ -162,7 +200,9 @@ public sealed partial class SeriesDetailPageViewModel(
     IResumeRepository resume,
     IProfileRepository profiles,
     ISettingsRepository settings,
-    INavigationService navigation) : PageViewModelBase
+    INavigationService navigation,
+    IDownloadManager downloads,
+    IDownloadPaths downloadPaths) : PageViewModelBase
 {
     private SeriesDetail? _detail;
     private ProfileScope? _scope;
@@ -182,6 +222,43 @@ public sealed partial class SeriesDetailPageViewModel(
     public override PageKey Key => PageKey.SeriesDetail;
 
     public override string Title => Item?.Name ?? _detail?.Name ?? "Series";
+
+    /// <summary>
+    /// Year, genre and rating on one line under the title.
+    /// </summary>
+    /// <remarks>
+    /// The year comes from the detail response when it has loaded and the grid
+    /// item otherwise, because the list endpoint carries it too — so it shows
+    /// immediately rather than appearing a second later.
+    /// </remarks>
+    public string MetaLine
+    {
+        get
+        {
+            var parts = new List<string>(3);
+
+            if ((_detail?.Year ?? Item?.Year) is { } year)
+            {
+                parts.Add(year.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            }
+
+            var genre = _detail?.Genre ?? Item?.Genre;
+
+            if (!string.IsNullOrWhiteSpace(genre))
+            {
+                parts.Add(genre.Trim());
+            }
+
+            var rating = _detail?.Rating ?? Item?.Rating;
+
+            if (!string.IsNullOrWhiteSpace(rating))
+            {
+                parts.Add($"★ {rating}");
+            }
+
+            return string.Join("  ·  ", parts);
+        }
+    }
 
     public ObservableCollection<SeriesSeason> Seasons { get; } = [];
 
@@ -229,6 +306,7 @@ public sealed partial class SeriesDetailPageViewModel(
             OnPropertyChanged(nameof(Plot));
             OnPropertyChanged(nameof(PosterUrl));
             OnPropertyChanged(nameof(Title));
+            OnPropertyChanged(nameof(MetaLine));
         }
         catch (XtreamException ex)
         {
@@ -304,6 +382,88 @@ public sealed partial class SeriesDetailPageViewModel(
             $"{Item?.Name ?? _detail.Name} - S{episode.Episode.SeasonNumber:00}E{episode.Number:00}",
             playlist,
             index))).ConfigureAwait(false);
+    }
+
+    [ObservableProperty]
+    private string? _downloadStatus;
+
+    /// <summary>Queues one episode.</summary>
+    [RelayCommand]
+    private async Task DownloadEpisodeAsync(EpisodeViewModel? episode)
+    {
+        if (episode is null)
+        {
+            return;
+        }
+
+        var queued = await QueueEpisodesAsync([episode]).ConfigureAwait(true);
+
+        DownloadStatus = queued == 0
+            ? "Could not start the download."
+            : $"Added {episode.Title} to downloads.";
+    }
+
+    /// <summary>
+    /// Queues every episode of the season on screen.
+    /// </summary>
+    /// <remarks>
+    /// They all go into the same queue rather than starting at once: the
+    /// manager runs at most two concurrently because each one occupies a
+    /// provider connection slot that live playback also needs.
+    /// </remarks>
+    [RelayCommand]
+    private async Task DownloadSeasonAsync()
+    {
+        if (Episodes.Count == 0)
+        {
+            return;
+        }
+
+        var queued = await QueueEpisodesAsync([.. Episodes]).ConfigureAwait(true);
+
+        DownloadStatus = queued == 0
+            ? "Could not start the downloads."
+            : $"Added {queued} episode{(queued == 1 ? string.Empty : "s")} to downloads.";
+    }
+
+    private async Task<int> QueueEpisodesAsync(IReadOnlyList<EpisodeViewModel> episodes)
+    {
+        var profile = await ActiveProfileAsync(CancellationToken.None).ConfigureAwait(true);
+
+        if (profile is null || _detail is null)
+        {
+            return 0;
+        }
+
+        var scope = new ProfileScope(profile.Id);
+        var seriesName = Item?.Name ?? _detail.Name;
+        var queued = 0;
+
+        foreach (var episode in episodes)
+        {
+            try
+            {
+                var target = await downloadPaths.ForEpisodeAsync(
+                    seriesName,
+                    episode.Episode.SeasonNumber,
+                    episode.Episode.EpisodeNumber,
+                    episode.Title,
+                    episode.Episode.ContainerExtension).ConfigureAwait(true);
+
+                await downloads.EnqueueAsync(
+                    scope, ContentKind.Series, episode.Episode.Id, episode.Title,
+                    episode.Episode.StreamUrl, target).ConfigureAwait(true);
+
+                queued++;
+            }
+            catch (Exception ex)
+            {
+                // One bad episode must not abandon the rest of the season.
+                DownloadStatus = $"{episode.Title}: {ex.Message}";
+            }
+        }
+
+        return queued;
     }
 
     [RelayCommand]

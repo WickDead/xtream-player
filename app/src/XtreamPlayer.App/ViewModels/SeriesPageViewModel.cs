@@ -1,4 +1,4 @@
-using CommunityToolkit.Mvvm.ComponentModel;
+﻿using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using XtreamPlayer.App.Behaviors;
 using XtreamPlayer.Core.Abstractions;
@@ -22,7 +22,18 @@ public sealed partial class SeriesItemViewModel(SeriesItem item, bool isFavorite
 
     public bool HasRating => !string.IsNullOrEmpty(Item.Rating);
 
-    public string? YearLabel => Item.LastModified?.Year.ToString();
+    /// <summary>
+    /// First air year, from the provider's release date.
+    /// </summary>
+    /// <remarks>
+    /// Not LastModified, which this used to read: that is when the provider last
+    /// touched the record, so every series in the catalog claimed to be from
+    /// this year.
+    /// </remarks>
+    public string? YearLabel =>
+        Item.Year?.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+    public bool HasYear => Item.Year is not null;
 
     [ObservableProperty]
     private bool _isFavorite = isFavorite;

@@ -1,4 +1,4 @@
-using Avalonia;
+﻿using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
 
@@ -24,6 +24,7 @@ public sealed class EpgTimeRuler : Control
             if (_source is not null)
             {
                 _source.OffsetChanged -= OnSourceChanged;
+                _source.RowsChanged -= OnSourceChanged;
             }
 
             _source = value;
@@ -31,6 +32,11 @@ public sealed class EpgTimeRuler : Control
             if (_source is not null)
             {
                 _source.OffsetChanged += OnSourceChanged;
+
+                // Scrolling is not the only thing that changes what belongs in
+                // this column: filtering the guide by category replaces the rows
+                // outright while the offset stays put.
+                _source.RowsChanged += OnSourceChanged;
             }
 
             InvalidateVisual();

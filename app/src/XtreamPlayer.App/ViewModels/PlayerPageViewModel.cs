@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging;
 using XtreamPlayer.Core.Abstractions;
 using XtreamPlayer.Core.Models;
 using XtreamPlayer.Core.Navigation;
+using XtreamPlayer.Infrastructure.Downloads;
 using XtreamPlayer.Playback;
 
 namespace XtreamPlayer.App.ViewModels;
@@ -40,6 +41,9 @@ public sealed partial class PlayerPageViewModel : PageViewModelBase
     private readonly IProfileRepository _profiles;
     private readonly ISettingsRepository _settings;
     private readonly INavigationService _navigation;
+    private readonly IRecordingService _recordings;
+    private readonly IDownloadManager _downloads;
+    private readonly IDownloadPaths _downloadPaths;
     private readonly ILogger<PlayerPageViewModel> _log;
 
     private readonly DispatcherTimer _checkpointTimer;
@@ -61,6 +65,9 @@ public sealed partial class PlayerPageViewModel : PageViewModelBase
         IProfileRepository profiles,
         ISettingsRepository settings,
         INavigationService navigation,
+        IRecordingService recordings,
+        IDownloadManager downloads,
+        IDownloadPaths downloadPaths,
         ILogger<PlayerPageViewModel> log)
     {
         _playback = playback;
@@ -68,6 +75,9 @@ public sealed partial class PlayerPageViewModel : PageViewModelBase
         _profiles = profiles;
         _settings = settings;
         _navigation = navigation;
+        _recordings = recordings;
+        _downloads = downloads;
+        _downloadPaths = downloadPaths;
         _log = log;
 
         _playback.StateChanged += OnStateChanged;
@@ -169,6 +179,14 @@ public sealed partial class PlayerPageViewModel : PageViewModelBase
         MediaTitle = request.Title;
         MediaSubtitle = request.Subtitle;
         IsLive = request.Kind == ContentKind.Live;
+
+        // Downloads and playback draw on the same small pool of provider
+        // connections, so the queue narrows to one transfer while a stream is
+        // open. Exceeding max_connections breaks the stream, not just the
+        // download.
+        _downloads.SetPlaybackActive(true);
+
+        IsRecording = _recordings.IsRecording(request.ContentId ?? string.Empty);
 
         var profile = await ActiveProfileAsync(ct).ConfigureAwait(false);
         _scope = profile is null ? null : new ProfileScope(profile.Id);
@@ -513,6 +531,62 @@ public sealed partial class PlayerPageViewModel : PageViewModelBase
         await base.OnNavigatingFromAsync(direction).ConfigureAwait(false);
     }
 
+    [ObservableProperty]
+    private bool _isRecording;
+
+    [ObservableProperty]
+    private string? _recordingStatus;
+
+    /// <summary>
+    /// Starts or stops recording the live channel being watched.
+    /// </summary>
+    /// <remarks>
+    /// The recording is a second, headless connection, so it keeps running if
+    /// you navigate away or switch channel — and it costs another of the
+    /// provider's connection slots, which is why it is only offered for live.
+    /// </remarks>
+    [RelayCommand]
+    private async Task ToggleRecordingAsync()
+    {
+        if (!IsLive || _request is null)
+        {
+            return;
+        }
+
+        var channelId = _request.ContentId ?? _request.Url;
+
+        try
+        {
+            if (_recordings.IsRecording(channelId))
+            {
+                var existing = _recordings.Active.FirstOrDefault(r => r.ChannelId == channelId);
+
+                if (existing is not null)
+                {
+                    await _recordings.StopAsync(existing.Id).ConfigureAwait(true);
+                }
+
+                IsRecording = false;
+                RecordingStatus = "Recording saved.";
+                return;
+            }
+
+            var target = await _downloadPaths
+                .ForRecordingAsync(_request.Title, MediaSubtitle).ConfigureAwait(true);
+
+            _recordings.Start(channelId, _request.Title, _request.Url, target, MediaSubtitle);
+
+            IsRecording = true;
+            RecordingStatus = $"Recording to {Path.GetFileName(target)}";
+        }
+        catch (Exception ex)
+        {
+            _log.LogWarning(ex, "Could not toggle recording.");
+            RecordingStatus = $"Recording failed: {ex.Message}";
+            IsRecording = _recordings.IsRecording(channelId);
+        }
+    }
+
     protected override void Dispose(bool disposing)
     {
         if (_disposed)
@@ -525,6 +599,7 @@ public sealed partial class PlayerPageViewModel : PageViewModelBase
         if (disposing)
         {
             _checkpointTimer.Stop();
+            _downloads.SetPlaybackActive(false);
 
             _playback.StateChanged -= OnStateChanged;
             _playback.PositionChanged -= OnPositionChanged;

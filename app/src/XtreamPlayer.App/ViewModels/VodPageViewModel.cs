@@ -1,4 +1,4 @@
-using CommunityToolkit.Mvvm.ComponentModel;
+﻿using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using XtreamPlayer.App.Behaviors;
 using XtreamPlayer.Core.Abstractions;
@@ -22,7 +22,12 @@ public sealed partial class VodItemViewModel(VodItem item, bool isFavorite)
 
     public bool HasRating => !string.IsNullOrEmpty(Item.Rating);
 
-    public string? YearLabel => Item.Added?.Year.ToString();
+    /// <summary>
+    /// When the provider added this, not when the film was released — the
+    /// release year is already inside the title for VOD.
+    /// </summary>
+    public string? AddedYearLabel => Item.Added?.Year.ToString(
+        System.Globalization.CultureInfo.InvariantCulture);
 
     [ObservableProperty]
     private bool _isFavorite = isFavorite;

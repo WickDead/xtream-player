@@ -587,12 +587,38 @@ public sealed class VlcPlaybackService : IPlaybackService
 
     private void OnOpening(object? sender, EventArgs e) => Post(() => SetState(PlaybackState.Opening));
 
+    /// <summary>
+    /// Tracks the cache filling, and — critically — reports when it is full.
+    /// </summary>
+    /// <remarks>
+    /// libvlc raises Playing partway through the initial buffering run and then
+    /// keeps reporting cache until it reaches 100. Treating only
+    /// <c>Cache &lt; 100</c> as interesting meant the last event, the one that
+    /// says the picture is actually up, was dropped — leaving "Buffering…" on
+    /// screen over video that had been playing for a minute.
+    /// </remarks>
     private void OnBuffering(object? sender, MediaPlayerBufferingEventArgs e)
     {
-        if (e.Cache < 100f)
+        var complete = e.Cache >= 100f;
+
+        Post(() =>
         {
-            Post(() => SetState(PlaybackState.Buffering));
-        }
+            if (complete)
+            {
+                // Only clears a spinner this class put up. A cache report that
+                // lands after Stop or an error must not resurrect playback.
+                if (_state is PlaybackState.Buffering or PlaybackState.Opening)
+                {
+                    SetState(_mediaPlayer.IsPlaying ? PlaybackState.Playing : PlaybackState.Paused);
+                }
+            }
+            else if (_state is PlaybackState.Playing or PlaybackState.Opening)
+            {
+                // A genuine rebuffer mid-stream, which live does often enough to
+                // be worth showing. Pausing deliberately is not buffering.
+                SetState(PlaybackState.Buffering);
+            }
+        });
     }
 
     private void OnPlaying(object? sender, EventArgs e) => Post(() =>
@@ -689,7 +715,20 @@ public sealed class VlcPlaybackService : IPlaybackService
 
         _lastRaisedPositionSeconds = seconds;
         var position = TimeSpan.FromMilliseconds(e.Time);
-        Post(() => PositionChanged?.Invoke(this, position));
+
+        Post(() =>
+        {
+            // The clock moving is proof the picture is up, whatever the cache
+            // events did or did not say. Not every source emits a 100% buffering
+            // event at all, and without this the overlay can outlive the stall
+            // that caused it.
+            if (_state is PlaybackState.Buffering && _mediaPlayer.IsPlaying)
+            {
+                SetState(PlaybackState.Playing);
+            }
+
+            PositionChanged?.Invoke(this, position);
+        });
     }
 
     private void OnElementaryStreamsChanged(object? sender, MediaPlayerESAddedEventArgs e) =>

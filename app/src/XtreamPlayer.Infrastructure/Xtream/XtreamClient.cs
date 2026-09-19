@@ -1,6 +1,7 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Net;
 using System.Text.Json;
+using XtreamPlayer.Core.Library;
 using XtreamPlayer.Core.Models;
 using XtreamPlayer.Infrastructure.Xtream.Json;
 
@@ -255,6 +256,7 @@ public sealed class XtreamClient(HttpClient http, Profile profile)
                 Plot = item.plot,
                 Genre = item.genre,
                 Rating = XtreamText.NormalizeRating(item.rating),
+                Year = ReleaseYear.Parse(item.AnyReleaseDate),
                 LastModified = item.LastModified,
             });
         }
@@ -328,6 +330,7 @@ public sealed class XtreamClient(HttpClient http, Profile profile)
             PosterUrl = NormalizeImageUrl(raw.info?.cover),
             BackdropUrl = NormalizeImageUrl(raw.info?.BackdropPath?.FirstOrDefault()),
             Rating = XtreamText.NormalizeRating(raw.info?.rating),
+            Year = ReleaseYear.Parse(raw.info?.AnyReleaseDate),
             Seasons = seasons,
             EpisodesBySeason = episodesBySeason,
         };

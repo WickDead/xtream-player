@@ -1,4 +1,4 @@
-using Avalonia;
+﻿using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
@@ -30,7 +30,21 @@ public partial class App : Application
 
             var shell = services.GetRequiredService<ShellViewModel>();
 
-            desktop.MainWindow = new MainWindow { DataContext = shell };
+            var window = new MainWindow { DataContext = shell };
+
+            // Time to a window the user can actually act on, measured from
+            // process start rather than from here — everything before this point
+            // (runtime init, libvlc load, migrations, DI) is part of the wait.
+            window.Opened += (_, _) =>
+            {
+                var elapsed = DateTime.Now - System.Diagnostics.Process.GetCurrentProcess().StartTime;
+
+                Serilog.Log.Information(
+                    "Window shown {Milliseconds:F0} ms after process start.",
+                    elapsed.TotalMilliseconds);
+            };
+
+            desktop.MainWindow = window;
             desktop.ShutdownMode = ShutdownMode.OnMainWindowClose;
         }
 

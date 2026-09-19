@@ -1,9 +1,10 @@
-using Microsoft.Extensions.DependencyInjection;
+﻿using Microsoft.Extensions.DependencyInjection;
 using XtreamPlayer.App.Media;
 using XtreamPlayer.App.ViewModels;
 using XtreamPlayer.Core.Abstractions;
 using XtreamPlayer.Core.Library;
 using XtreamPlayer.Core.Navigation;
+using XtreamPlayer.Infrastructure.Downloads;
 using XtreamPlayer.Infrastructure.Epg;
 using XtreamPlayer.Infrastructure.Migration;
 using XtreamPlayer.Infrastructure.Persistence;
@@ -57,6 +58,17 @@ public static class ServiceRegistration
         services.AddSingleton<PlaybackPreferences>();
         services.AddSingleton<IPlaybackService, VlcPlaybackService>();
 
+        // Recording runs its own headless players, independent of the one
+        // driving the screen, so it survives navigating away from the player.
+        services.AddSingleton<IRecordingService, RecordingService>();
+
+        // ---- downloads ----
+        // Singletons: the queue has to outlive the Downloads page, or closing it
+        // would stop whatever is transferring.
+        services.AddSingleton<IDownloadRepository, DownloadRepository>();
+        services.AddSingleton<IDownloadPaths, DownloadPaths>();
+        services.AddSingleton<IDownloadManager, DownloadManager>();
+
         // ---- navigation ----
         // Pages are transient: the navigation stack owns their lifetime, and a
         // singleton page could not appear twice in a back stack.
@@ -70,6 +82,7 @@ public static class ServiceRegistration
         services.AddTransient<PlayerPageViewModel>();
         services.AddTransient<SettingsPageViewModel>();
         services.AddTransient<GuidePageViewModel>();
+        services.AddTransient<DownloadsPageViewModel>();
 
         services.AddSingleton<INavigationService>(provider =>
             new NavigationService(route => CreatePage(provider, route)));
@@ -98,9 +111,10 @@ public static class ServiceRegistration
         PageKey.Player => provider.GetRequiredService<PlayerPageViewModel>(),
         PageKey.Settings => provider.GetRequiredService<SettingsPageViewModel>(),
         PageKey.Guide => provider.GetRequiredService<GuidePageViewModel>(),
+        PageKey.Downloads => provider.GetRequiredService<DownloadsPageViewModel>(),
 
-        // Downloads lands in a later phase; until then it is the dashboard
-        // rather than a crash.
+        // A route with no page is a bug, but landing on the dashboard beats
+        // taking the window down over it.
         _ => provider.GetRequiredService<DashboardPageViewModel>(),
     };
 }

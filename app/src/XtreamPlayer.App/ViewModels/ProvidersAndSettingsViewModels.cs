@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging;
 using XtreamPlayer.Core.Abstractions;
 using XtreamPlayer.Core.Models;
 using XtreamPlayer.Core.Navigation;
+using XtreamPlayer.Infrastructure.Downloads;
 using XtreamPlayer.Infrastructure.Migration;
 using XtreamPlayer.Infrastructure.Xtream;
 
@@ -296,7 +297,8 @@ public sealed partial class ProvidersPageViewModel(
 public sealed partial class SettingsPageViewModel(
     ISettingsRepository settings,
     IHiddenCategoryRepository hidden,
-    IProfileRepository profiles) : PageViewModelBase
+    IProfileRepository profiles,
+    IDownloadPaths downloadPaths) : PageViewModelBase
 {
     [ObservableProperty]
     private string _preferredAudioLanguages = "eng, en";
@@ -309,6 +311,9 @@ public sealed partial class SettingsPageViewModel(
 
     [ObservableProperty]
     private int _catalogTtlHours = 12;
+
+    [ObservableProperty]
+    private string _downloadsFolder = string.Empty;
 
     [ObservableProperty]
     private string? _statusMessage;
@@ -345,6 +350,11 @@ public sealed partial class SettingsPageViewModel(
         {
             CatalogTtlHours = ttl;
         }
+
+        // Resolved rather than read raw, so the box shows the folder actually in
+        // use — including the default, which is otherwise invisible until
+        // something lands in it.
+        DownloadsFolder = await downloadPaths.RootAsync(ct).ConfigureAwait(false);
     }
 
     [RelayCommand]
@@ -358,6 +368,25 @@ public sealed partial class SettingsPageViewModel(
             .ConfigureAwait(false);
         await settings.SetAsync(SettingKeys.CatalogTtlHours, CatalogTtlHours.ToString())
             .ConfigureAwait(false);
+
+        // Stored only when it is usable. A path that cannot be created would
+        // otherwise be accepted here and fail later, at the moment a download
+        // starts, where the cause is far less obvious.
+        var folder = DownloadsFolder?.Trim();
+
+        if (!string.IsNullOrEmpty(folder))
+        {
+            try
+            {
+                Directory.CreateDirectory(folder);
+                await settings.SetAsync(SettingKeys.DownloadsPath, folder).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                StatusMessage = $"Downloads folder not saved - {folder} is unusable: {ex.Message}";
+                return;
+            }
+        }
 
         StatusMessage = "Saved. Playback settings apply to the next stream you open.";
     }

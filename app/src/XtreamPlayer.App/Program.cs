@@ -1,4 +1,5 @@
-using Avalonia;
+﻿using Avalonia;
+using LibVLCSharp.Shared;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Serilog;
@@ -64,6 +65,36 @@ internal static class Program
             if (args.Contains("--refresh-guide", StringComparer.OrdinalIgnoreCase))
             {
                 return RunGuideRefresh(Host);
+            }
+
+            // Downloads a movie matching a search term, so the queue, resume and
+            // range handling can be exercised against the real provider.
+            if (TryGetOption(args, "--download") is { } downloadQuery)
+            {
+                return RunDownload(Host, downloadQuery,
+                    int.TryParse(TryGetOption(args, "--seconds"), out var limit) ? limit : 20);
+            }
+
+            // Measures each interaction against the real catalogs, because
+            // "feels fast" is not a claim worth making without numbers.
+            if (args.Contains("--benchmark", StringComparer.OrdinalIgnoreCase))
+            {
+                var profile = ActiveProfile(Host.Services);
+
+                if (profile is null)
+                {
+                    Console.Error.WriteLine("No provider configured.");
+                    return 2;
+                }
+
+                return Benchmark.Run(Host.Services, profile);
+            }
+
+            // Records a live channel matching a search term for N seconds.
+            if (TryGetOption(args, "--record") is { } recordQuery)
+            {
+                return RunRecord(Host, recordQuery,
+                    int.TryParse(TryGetOption(args, "--seconds"), out var secs) ? secs : 20);
             }
 
             return BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
@@ -150,6 +181,190 @@ internal static class Program
         }
 
         return 0;
+    }
+
+    /// <summary>
+    /// Downloads the first movie matching a search term, briefly.
+    /// </summary>
+    /// <remarks>
+    /// Verifies the whole chain against a real provider — range requests,
+    /// the .part file, progress persistence and resume — without needing the
+    /// UI. It cancels after a few seconds and reports whether the partial file
+    /// is resumable, which is the property that actually matters.
+    /// </remarks>
+    private static int RunDownload(IHost host, string query, int seconds)
+    {
+        var services = host.Services;
+
+        var profile = ActiveProfile(services);
+
+        if (profile is null)
+        {
+            Console.Error.WriteLine("No provider configured.");
+            return 2;
+        }
+
+        var catalog = services.GetRequiredService<XtreamPlayer.Infrastructure.Xtream.ICatalogStore>();
+        catalog.LoadAsync(profile).GetAwaiter().GetResult();
+
+        var item = catalog.Current.Vod.Items.FirstOrDefault(i =>
+            i.Name.Contains(query, StringComparison.OrdinalIgnoreCase));
+
+        if (item is null)
+        {
+            Console.Error.WriteLine($"No movie matching \"{query}\".");
+            return 2;
+        }
+
+        var downloads = services.GetRequiredService<
+            XtreamPlayer.Infrastructure.Downloads.IDownloadManager>();
+
+        var paths = services.GetRequiredService<
+            XtreamPlayer.Infrastructure.Downloads.IDownloadPaths>();
+
+        var scope = new XtreamPlayer.Core.Models.ProfileScope(profile.Id);
+        var target = paths.ForMovieAsync(item).GetAwaiter().GetResult();
+
+        Console.WriteLine($"Downloading: {item.Name}");
+        Console.WriteLine($"To         : {target}");
+
+        downloads.LoadAsync(scope).GetAwaiter().GetResult();
+
+        var job = downloads.EnqueueAsync(
+            scope, XtreamPlayer.Core.Models.ContentKind.Vod, item.Id, item.Name,
+            item.StreamUrl, target).GetAwaiter().GetResult();
+
+        for (var i = 0; i < seconds; i++)
+        {
+            Thread.Sleep(1000);
+
+            var current = downloads.Jobs.FirstOrDefault(j => j.Id == job.Id);
+
+            if (current is null)
+            {
+                break;
+            }
+
+            Console.WriteLine(
+                $"  {current.State}  {current.DownloadedBytes / (1024.0 * 1024):F1} MB"
+              + (current.TotalBytes > 0 ? $" of {current.TotalBytes / (1024.0 * 1024):F1} MB" : string.Empty)
+              + (current.Error is { } e ? $"  [{e}]" : string.Empty));
+
+            if (current.State is XtreamPlayer.Core.Models.DownloadState.Completed
+                or XtreamPlayer.Core.Models.DownloadState.Failed)
+            {
+                break;
+            }
+        }
+
+        downloads.PauseAsync(job.Id).GetAwaiter().GetResult();
+        Thread.Sleep(500);
+
+        var final = downloads.Jobs.FirstOrDefault(j => j.Id == job.Id);
+
+        // The job's own path, not the one just computed: re-queueing an existing
+        // download keeps writing to the file it already started.
+        var actual = final?.TargetPath ?? target;
+        var partial = actual + ".part";
+
+        Console.WriteLine();
+        Console.WriteLine($"state      : {final?.State}");
+        Console.WriteLine($"supports   : {(final?.SupportsRange == true ? "range (resumable)" : "no range")}");
+        Console.WriteLine($"file       : {actual}");
+        Console.WriteLine($"on disk    : {(File.Exists(partial)
+            ? $"{new FileInfo(partial).Length / (1024.0 * 1024):F1} MB partial"
+            : File.Exists(actual) ? "complete" : "nothing")}");
+
+        return final is null || final.State == XtreamPlayer.Core.Models.DownloadState.Failed ? 1 : 0;
+    }
+
+    /// <summary>Records a matching live channel for a few seconds.</summary>
+    private static int RunRecord(IHost host, string query, int seconds)
+    {
+        var services = host.Services;
+        var profile = ActiveProfile(services);
+
+        if (profile is null)
+        {
+            Console.Error.WriteLine("No provider configured.");
+            return 2;
+        }
+
+        var catalog = services.GetRequiredService<XtreamPlayer.Infrastructure.Xtream.ICatalogStore>();
+        catalog.LoadAsync(profile).GetAwaiter().GetResult();
+
+        var channel = catalog.Current.Live.Items.FirstOrDefault(c =>
+            c.Name.Contains(query, StringComparison.OrdinalIgnoreCase));
+
+        if (channel is null)
+        {
+            Console.Error.WriteLine($"No channel matching \"{query}\".");
+            return 2;
+        }
+
+        // libvlc reports sout chain failures only through its own log, and a
+        // recording that produces a zero-byte file says nothing otherwise.
+        var engine = services.GetRequiredService<XtreamPlayer.Playback.LibVlcEngine>();
+
+        if (engine.Options.Diagnostics)
+        {
+            engine.LibVlc.Log += (_, e) =>
+            {
+                // Warnings and errors only. A full debug dump is thousands of
+                // lines and buries the one line that explains a failure — which
+                // for a provider rejection is an HTTP status from the access
+                // module, not anything the sout chain says.
+                if (e.Level is LogLevel.Warning or LogLevel.Error)
+                {
+                    Console.WriteLine($"    [{e.Level}] {e.Module}: {e.Message}");
+                }
+            };
+        }
+
+        var recordings = services.GetRequiredService<XtreamPlayer.Playback.IRecordingService>();
+        var paths = services.GetRequiredService<
+            XtreamPlayer.Infrastructure.Downloads.IDownloadPaths>();
+
+        var target = paths.ForRecordingAsync(channel.Name, null).GetAwaiter().GetResult();
+
+        Console.WriteLine($"Recording: {channel.Name}");
+        Console.WriteLine($"To       : {target}");
+
+        var session = recordings.Start(channel.Id, channel.Name, channel.StreamUrl, target);
+
+        for (var i = 0; i < seconds; i++)
+        {
+            Thread.Sleep(1000);
+            Console.WriteLine($"  {i + 1}s  {session.Bytes / 1024.0:F0} KB");
+        }
+
+        recordings.StopAsync(session.Id).GetAwaiter().GetResult();
+
+        var size = File.Exists(target) ? new FileInfo(target).Length : 0;
+
+        Console.WriteLine();
+        Console.WriteLine($"wrote    : {size / (1024.0 * 1024):F2} MB to {target}");
+
+        // A .ts that never grew means the sout chain never received anything,
+        // which is the failure worth catching here.
+        return size > 0 ? 0 : 1;
+    }
+
+    private static XtreamPlayer.Core.Models.Profile? ActiveProfile(IServiceProvider services)
+    {
+        var settings = services
+            .GetRequiredService<XtreamPlayer.Core.Abstractions.ISettingsRepository>();
+
+        var profiles = services
+            .GetRequiredService<XtreamPlayer.Core.Abstractions.IProfileRepository>();
+
+        var activeId = settings
+            .GetAsync(XtreamPlayer.Core.Abstractions.SettingKeys.ActiveProfileId)
+            .GetAwaiter().GetResult();
+
+        var all = profiles.ListAsync().GetAwaiter().GetResult();
+
+        return all.FirstOrDefault(p => p.Id == activeId) ?? all.FirstOrDefault();
     }
 
     private static int RunGuideRefresh(IHost host)

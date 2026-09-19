@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using XtreamPlayer.App.Behaviors;
@@ -78,6 +78,12 @@ public abstract partial class BrowsePageViewModel<TItem> : PageViewModelBase, ID
 
     private IReadOnlyList<TItem> _source = [];
     private IReadOnlyList<FilterableItem> _filterable = [];
+
+    /// <summary>
+    /// Sort orders for the current catalog, built once rather than on every
+    /// keystroke. See <see cref="CatalogOrdering"/> for why.
+    /// </summary>
+    private CatalogOrdering? _ordering;
     private IReadOnlyList<Category> _categories = [];
     private HashSet<string> _hiddenIds = new(StringComparer.Ordinal);
 
@@ -229,6 +235,7 @@ public abstract partial class BrowsePageViewModel<TItem> : PageViewModelBase, ID
         }
 
         _filterable = projected;
+        _ordering = new CatalogOrdering(projected);
 
         var hiddenRows = await _hidden.ListAsync(scope, Scope, ct).ConfigureAwait(false);
         var resolver = new HiddenCategoryResolver(hiddenRows);
@@ -325,11 +332,12 @@ public abstract partial class BrowsePageViewModel<TItem> : PageViewModelBase, ID
         };
 
         var snapshot = _filterable;
+        var ordering = _ordering;
         var source = _source;
 
         _ = Task.Run(() =>
         {
-            var indexes = CatalogFilter.Apply(snapshot, request);
+            var indexes = CatalogFilter.Apply(snapshot, request, ordering);
 
             if (cts.IsCancellationRequested)
             {

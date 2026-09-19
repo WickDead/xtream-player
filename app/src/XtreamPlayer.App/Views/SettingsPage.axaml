@@ -1,4 +1,4 @@
-<UserControl xmlns="https://github.com/avaloniaui"
+﻿<UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="clr-namespace:XtreamPlayer.App.ViewModels"
              x:Class="XtreamPlayer.App.Views.SettingsPage"
@@ -45,6 +45,11 @@
       </StackPanel>
 
       <StackPanel Orientation="Horizontal" Spacing="10">
+        <TextBlock Classes="h3" Text="Downloads" />
+        <TextBlock Classes="muted"
+                   Text="Where downloaded movies, episodes and recordings are written." />
+        <TextBox Text="{Binding DownloadsFolder, Mode=TwoWay}" Watermark="Downloads folder" />
+
         <Button Classes="accent" Content="Save" Command="{Binding SaveCommand}" />
         <TextBlock Classes="muted" Text="{Binding StatusMessage}" VerticalAlignment="Center" />
       </StackPanel>

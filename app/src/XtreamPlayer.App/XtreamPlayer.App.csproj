@@ -1,15 +1,44 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <!-- Exe, not WinExe. WinExe detaches from the console on Windows, which is
-         how a startup crash ends up printing nothing anywhere and the app just
-         appears to do nothing. A console costs nothing and the crash handler
-         writes a log file regardless. -->
-    <OutputType>Exe</OutputType>
     <RootNamespace>XtreamPlayer.App</RootNamespace>
     <AssemblyName>XtreamPlayer</AssemblyName>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+
+    <Version>0.2.0</Version>
+    <Company>XtreamPlayer</Company>
+    <Product>Xtream Player</Product>
+    <Description>An Xtream IPTV player with a real back stack, an XMLTV guide and a built-in video engine.</Description>
+  </PropertyGroup>
+
+  <!--
+    Exe during development so a startup crash prints somewhere: WinExe detaches
+    from the console, which is how a failure before the window opens ends up
+    looking like the app simply never ran. Release ships WinExe because a console
+    flashing up on every launch is not something to inflict on a released build,
+    and the crash handler writes crash.log either way.
+  -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Debug'">
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)' != 'Debug'">
+    <OutputType>WinExe</OutputType>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <!--
+      Self-contained, folder deployment. NOT single-file: libvlc scans a real
+      plugins directory on disk at init, and bundling the natives into a
+      self-extracting exe is a reliable way to make it find nothing and fail with
+      no usable error.
+    -->
+    <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == '' and $([MSBuild]::IsOSPlatform('Windows'))">win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>false</PublishSingleFile>
+    <PublishReadyToRun>true</PublishReadyToRun>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
   </PropertyGroup>
 
   <ItemGroup>
@@ -30,5 +59,27 @@
     <PackageReference Include="Serilog.Sinks.Console" />
     <PackageReference Include="Serilog.Sinks.File" />
   </ItemGroup>
+
+  <!--
+    The libvlc package copies win-x64, win-x86 and win-arm64 regardless of the
+    RID being published, which is 182 MB of natives for architectures this build
+    cannot load. The .lib files are import libraries for compiling against
+    libvlc and are dead weight at runtime.
+  -->
+  <Target Name="TrimUnusedLibVlcArchitectures" AfterTargets="Publish"
+          Condition="'$(RuntimeIdentifier)' != '' and Exists('$(PublishDir)libvlc')">
+
+    <ItemGroup>
+      <_VlcArchDir Include="$([System.IO.Directory]::GetDirectories('$(PublishDir)libvlc'))" />
+      <_VlcArchToRemove Include="@(_VlcArchDir)" Condition="'%(Filename)' != '$(RuntimeIdentifier)'" />
+      <_VlcImportLib Include="$(PublishDir)libvlc/**/*.lib" />
+    </ItemGroup>
+
+    <RemoveDir Directories="@(_VlcArchToRemove)" />
+    <Delete Files="@(_VlcImportLib)" />
+
+    <Message Importance="high"
+             Text="Trimmed libvlc natives to $(RuntimeIdentifier) (removed @(_VlcArchToRemove->'%(Filename)', ', '))." />
+  </Target>
 
 </Project>

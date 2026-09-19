@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.Logging;
@@ -27,6 +27,7 @@ public sealed partial class GuidePageViewModel(
     ICatalogStore catalog,
     IProfileRepository profiles,
     IFavoritesStore favorites,
+    IHiddenCategoryRepository hidden,
     ISettingsRepository settings,
     INavigationService navigation,
     ILogger<GuidePageViewModel> log) : PageViewModelBase
@@ -40,6 +41,22 @@ public sealed partial class GuidePageViewModel(
     private static readonly TimeSpan LookAhead = TimeSpan.FromHours(28);
 
     private Profile? _profile;
+
+    /// <summary>
+    /// The loaded window, kept so changing category re-filters in memory rather
+    /// than going back to SQLite for listings that have not changed.
+    /// </summary>
+    private IReadOnlyDictionary<string, List<EpgProgramme>> _guide =
+        new Dictionary<string, List<EpgProgramme>>();
+
+    private HashSet<string> _hiddenCategoryIds = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Set while the rail is being rebuilt, so restoring the user's category
+    /// does not count as them choosing it — which would both rebuild the rows a
+    /// second time and write the setting straight back.
+    /// </summary>
+    private bool _restoringCategory;
 
     [ObservableProperty]
     private IReadOnlyList<EpgRow> _rows = [];
@@ -63,7 +80,7 @@ public sealed partial class GuidePageViewModel(
     private bool _isRefreshing;
 
     [ObservableProperty]
-    private bool _favoritesOnly;
+    private CategoryRow? _selectedCategory;
 
     [ObservableProperty]
     private int _matchedChannels;
@@ -89,6 +106,12 @@ public sealed partial class GuidePageViewModel(
     private ZoomLevel? _zoom;
 
     public ObservableCollection<string> ChannelNames { get; } = [];
+
+    /// <summary>
+    /// The same rail Live uses, so "Sports" means the same set of channels on
+    /// both pages, including the Favorites and Recent pseudo-categories.
+    /// </summary>
+    public ObservableCollection<CategoryRow> Categories { get; } = [];
 
     public bool HasRows => Rows.Count > 0;
 
@@ -151,7 +174,24 @@ public sealed partial class GuidePageViewModel(
         }
     }
 
-    partial void OnFavoritesOnlyChanged(bool value) => _ = LoadAsync(CancellationToken.None);
+    partial void OnSelectedCategoryChanged(CategoryRow? value)
+    {
+        if (_restoringCategory)
+        {
+            return;
+        }
+
+        // Purely a re-projection of listings already in memory, so switching
+        // category is instant even on a twelve-thousand-channel provider.
+        BuildRows();
+
+        if (value is not null)
+        {
+            _ = settings.SetAsync(CategorySettingKey, value.Selection.PersistKey);
+        }
+    }
+
+    private const string CategorySettingKey = "guide.category";
 
     private async Task RefreshIfStaleAsync(TimeSpan ttl)
     {
@@ -211,40 +251,18 @@ public sealed partial class GuidePageViewModel(
         {
             var scope = new ProfileScope(_profile.Id);
 
-            var guide = await epg
+            _guide = await epg
                 .GetGuideAsync(scope, WindowStart, WindowStart + WindowLength, ct)
                 .ConfigureAwait(true);
 
             var mappings = await epg.GetMappingsAsync(scope, ct).ConfigureAwait(true);
 
-            var channels = catalog.Current.Live.Items;
-            TotalChannels = channels.Count;
+            TotalChannels = catalog.Current.Live.Items.Count;
             MatchedChannels = mappings.Values.Count(m => m.IsMatched);
 
-            var favoriteIds = favorites.IdsFor(ContentKind.Live);
+            await RebuildRailAsync(scope, ct).ConfigureAwait(true);
+            BuildRows();
 
-            var rows = new List<EpgRow>(channels.Count);
-            ChannelNames.Clear();
-
-            foreach (var channel in channels)
-            {
-                if (FavoritesOnly && !favoriteIds.Contains(channel.Id))
-                {
-                    continue;
-                }
-
-                // Channels with no guide data still get a row. Hiding them would
-                // make the grid disagree with the channel list, and an empty row
-                // at least says the channel exists.
-                guide.TryGetValue(channel.Id, out var programmes);
-
-                rows.Add(new EpgRow(channel.Id, channel.Name, programmes ?? []));
-                ChannelNames.Add(channel.Name);
-            }
-
-            Rows = rows;
-
-            OnPropertyChanged(nameof(HasRows));
             OnPropertyChanged(nameof(MatchSummary));
 
             var state = await epg.GetStateAsync(scope, ct).ConfigureAwait(true);
@@ -264,6 +282,111 @@ public sealed partial class GuidePageViewModel(
         {
             IsBusy = false;
         }
+    }
+
+    /// <summary>
+    /// Builds the category rail from the live catalog, honouring hidden
+    /// categories so the guide does not show what Live has been told to hide.
+    /// </summary>
+    private async Task RebuildRailAsync(ProfileScope scope, CancellationToken ct)
+    {
+        var live = catalog.Current.Live;
+
+        var hiddenRows = await hidden.ListAsync(scope, CategoryScope.Live, ct).ConfigureAwait(true);
+        var resolver = new HiddenCategoryResolver(hiddenRows);
+
+        _hiddenCategoryIds = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var category in live.Categories)
+        {
+            if (resolver.IsHidden(category.Id, category.Name))
+            {
+                _hiddenCategoryIds.Add(category.Id);
+            }
+        }
+
+        var rows = CatalogFilter.BuildRail(
+            live.Categories,
+            _hiddenCategoryIds,
+            CategorySort.ProviderOrder,
+            showHidden: false,
+            totalCount: live.Items.Count,
+            favoriteCount: favorites.IdsFor(ContentKind.Live).Count);
+
+        var previous = SelectedCategory?.Selection
+            ?? await RestoredSelectionAsync(ct).ConfigureAwait(true);
+
+        Categories.Clear();
+
+        foreach (var row in rows)
+        {
+            Categories.Add(row);
+        }
+
+        _restoringCategory = true;
+        try
+        {
+            SelectedCategory = Categories.FirstOrDefault(c => c.Selection == previous)
+                               ?? Categories.FirstOrDefault();
+        }
+        finally
+        {
+            _restoringCategory = false;
+        }
+    }
+
+    private async Task<CategorySelection?> RestoredSelectionAsync(CancellationToken ct)
+    {
+        var key = await settings.GetAsync(CategorySettingKey, ct).ConfigureAwait(true);
+
+        return key is null
+            ? null
+            : Categories.FirstOrDefault(c => c.Selection.PersistKey == key)?.Selection;
+    }
+
+    /// <summary>
+    /// Projects the loaded window into grid rows for the selected category.
+    /// </summary>
+    /// <remarks>
+    /// Channels with no listings still get a row. Dropping them would make the
+    /// guide disagree with the channel list, and an empty row at least says the
+    /// channel exists.
+    /// </remarks>
+    private void BuildRows()
+    {
+        var channels = catalog.Current.Live.Items;
+        var selection = SelectedCategory?.Selection ?? CategorySelection.All.Instance;
+        var favoriteIds = favorites.IdsFor(ContentKind.Live);
+
+        var rows = new List<EpgRow>(channels.Count);
+        ChannelNames.Clear();
+
+        foreach (var channel in channels)
+        {
+            var include = selection switch
+            {
+                CategorySelection.Favorites => favoriteIds.Contains(channel.Id),
+                CategorySelection.Real real => channel.CategoryId == real.CategoryId,
+
+                // A hidden category is excluded from All but still reachable by
+                // selecting it, which is what makes hiding feel like tidying
+                // rather than deletion.
+                _ => !_hiddenCategoryIds.Contains(channel.CategoryId),
+            };
+
+            if (!include)
+            {
+                continue;
+            }
+
+            _guide.TryGetValue(channel.Id, out var programmes);
+
+            rows.Add(new EpgRow(channel.Id, channel.Name, programmes ?? []));
+            ChannelNames.Add(channel.Name);
+        }
+
+        Rows = rows;
+        OnPropertyChanged(nameof(HasRows));
     }
 
     private void OnProgress(object? sender, EpgRefreshProgress progress) =>

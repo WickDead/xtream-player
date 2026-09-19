@@ -1,4 +1,4 @@
-using Avalonia;
+﻿using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
@@ -45,10 +45,22 @@ public sealed class EpgTimelineCanvas : Control, ILogicalScrollable
     private const double BlockGap = 2;
     private const double TextPadding = 8;
 
+    /// <summary>
+    /// Below this a block cannot show enough of a title to be worth reading, and
+    /// the ellipsised stub of one next to the stub of the next block just reads
+    /// as garbled text. Blocks narrower than this are drawn empty; the tooltip
+    /// and the detail panel still name them.
+    /// </summary>
+    private const double MinimumTextWidth = 48;
+
+    /// <summary>Titles, and the smaller size used for times and placeholders.</summary>
+    private const double TitleFontSize = 12.5;
+    private const double DetailFontSize = 11;
+
     /// <summary>Bounded so a long session cannot accumulate layouts forever.</summary>
     private const int MaxCachedLayouts = 2000;
 
-    private readonly Dictionary<(string, int), FormattedText> _textCache = [];
+    private readonly Dictionary<(string Content, int Width, double FontSize), FormattedText> _textCache = [];
     private readonly DispatcherTimer _nowTimer;
 
     private IReadOnlyList<EpgRow> _rows = [];
@@ -110,6 +122,17 @@ public sealed class EpgTimelineCanvas : Control, ILogicalScrollable
         set => SetValue(RowsProperty, value);
     }
 
+    /// <summary>
+    /// Raised when the row set changes, so the pinned channel column repaints.
+    /// </summary>
+    /// <remarks>
+    /// The column follows this canvas rather than scrolling itself, and it used
+    /// to repaint only on OffsetChanged. Changing the guide's category replaces
+    /// the rows without moving the scroll offset, so the programmes updated
+    /// while the channel names beside them stayed on the previous category.
+    /// </remarks>
+    public event EventHandler? RowsChanged;
+
     public event EventHandler<EpgProgrammeEventArgs>? ProgrammeSelected;
     public event EventHandler<EpgProgrammeEventArgs>? ProgrammeActivated;
 
@@ -140,6 +163,7 @@ public sealed class EpgTimelineCanvas : Control, ILogicalScrollable
             canvas._textCache.Clear();
             canvas.UpdateExtent();
             canvas.InvalidateVisual();
+            canvas.RowsChanged?.Invoke(canvas, EventArgs.Empty);
         });
 
         PixelsPerMinuteProperty.Changed.AddClassHandler<EpgTimelineCanvas>((canvas, _) =>
@@ -158,6 +182,19 @@ public sealed class EpgTimelineCanvas : Control, ILogicalScrollable
         _extent = new Size(
             WindowLength.TotalMinutes * PixelsPerMinute,
             Math.Max(1, _rows.Count) * RowHeight);
+
+        // Scrolled to channel 5,000 and then filtered down to a category of 50:
+        // without re-clamping, the offset stays past the new extent and the grid
+        // renders empty with no way to tell why.
+        var clamped = new Vector(
+            Math.Clamp(_offset.X, 0, Math.Max(0, _extent.Width - _viewport.Width)),
+            Math.Clamp(_offset.Y, 0, Math.Max(0, _extent.Height - _viewport.Height)));
+
+        if (clamped != _offset)
+        {
+            _offset = clamped;
+            OffsetChanged?.Invoke(this, EventArgs.Empty);
+        }
 
         _scrollInvalidated?.Invoke(this, EventArgs.Empty);
     }
@@ -265,7 +302,7 @@ public sealed class EpgTimelineCanvas : Control, ILogicalScrollable
             if (row.Programmes.Count == 0)
             {
                 DrawText(context, "No guide data", muted,
-                    new Rect(TextPadding, y + 18, Math.Min(240, Bounds.Width), 20), rowIndex, -1);
+                    new Rect(TextPadding, y + 18, Math.Min(240, Bounds.Width), 20), DetailFontSize);
                 continue;
             }
 
@@ -309,14 +346,14 @@ public sealed class EpgTimelineCanvas : Control, ILogicalScrollable
                 }
 
                 // Clip so a long title cannot spill into the next block.
-                if (width > 26)
+                if (width >= MinimumTextWidth)
                 {
                     using (context.PushClip(rect))
                     {
                         DrawText(context, programme.Title, text,
                             new Rect(rect.X + TextPadding, rect.Y + 8,
                                 Math.Max(10, width - TextPadding * 2), 18),
-                            rowIndex, index);
+                            TitleFontSize);
 
                         if (rect.Height > 34 && width > 90)
                         {
@@ -325,7 +362,7 @@ public sealed class EpgTimelineCanvas : Control, ILogicalScrollable
                                 muted,
                                 new Rect(rect.X + TextPadding, rect.Y + 28,
                                     Math.Max(10, width - TextPadding * 2), 16),
-                                rowIndex, index + 1_000_000);
+                                DetailFontSize);
                         }
                     }
                 }
@@ -376,14 +413,17 @@ public sealed class EpgTimelineCanvas : Control, ILogicalScrollable
     /// does not.
     /// </remarks>
     private void DrawText(
-        DrawingContext context, string content, IBrush brush, Rect bounds, int row, int column)
+        DrawingContext context, string content, IBrush brush, Rect bounds, double fontSize)
     {
         if (bounds.Width < 8 || string.IsNullOrEmpty(content))
         {
             return;
         }
 
-        var key = (content, (int)bounds.Width);
+        // Font size belongs in the key: the same string is drawn at two sizes on
+        // this control, and keying on content and width alone would hand a title
+        // the layout built for a timestamp.
+        var key = (content, (int)bounds.Width, fontSize);
 
         if (!_textCache.TryGetValue(key, out var layout))
         {
@@ -397,7 +437,7 @@ public sealed class EpgTimelineCanvas : Control, ILogicalScrollable
                 System.Globalization.CultureInfo.CurrentCulture,
                 FlowDirection.LeftToRight,
                 Typeface.Default,
-                column < 0 || column >= 1_000_000 ? 11 : 12.5,
+                fontSize,
                 brush)
             {
                 MaxTextWidth = bounds.Width,

@@ -1,5 +1,6 @@
-using Dapper;
+﻿using Dapper;
 using Microsoft.Data.Sqlite;
+using XtreamPlayer.Core.Library;
 using XtreamPlayer.Core.Models;
 using XtreamPlayer.Infrastructure.Persistence;
 
@@ -103,6 +104,15 @@ public sealed class EpgRepository(IDbConnectionFactory connections) : IEpgReposi
             list.Add(Map(row));
         }
 
+        // Feeds overlap. Resolving it here rather than at the point of drawing
+        // means the guide grid, now/next and anything else reading a window all
+        // see the same timeline, and the grid's binary search gets the sorted,
+        // disjoint listings it assumes.
+        foreach (var channelId in result.Keys.ToList())
+        {
+            result[channelId] = EpgTimeline.Normalize(result[channelId]);
+        }
+
         return result;
     }
 
@@ -132,7 +142,7 @@ public sealed class EpgRepository(IDbConnectionFactory connections) : IEpgReposi
             },
             cancellationToken: ct));
 
-        return [.. rows.Select(Map)];
+        return EpgTimeline.Normalize([.. rows.Select(Map)]);
     }
 
     public async Task<IReadOnlyList<EpgChannel>> GetChannelsAsync(

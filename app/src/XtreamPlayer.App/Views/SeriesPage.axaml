@@ -1,4 +1,4 @@
-<UserControl xmlns="https://github.com/avaloniaui"
+﻿<UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="clr-namespace:XtreamPlayer.App.ViewModels"
              xmlns:media="clr-namespace:XtreamPlayer.App.Media"
@@ -129,9 +129,15 @@
                                 CommandParameter="{Binding}" />
                       </Panel>
 
-                      <TextBlock Text="{Binding Name}" FontSize="{DynamicResource TextSm}"
-                                 MaxLines="2" TextWrapping="Wrap" TextTrimming="CharacterEllipsis"
-                                 HorizontalAlignment="Left" Margin="2,0" />
+                      <StackPanel Spacing="1" Margin="2,0">
+                        <TextBlock Text="{Binding Name}" FontSize="{DynamicResource TextSm}"
+                                   MaxLines="2" TextWrapping="Wrap" TextTrimming="CharacterEllipsis"
+                                   HorizontalAlignment="Left" />
+                        <TextBlock Classes="muted" Text="{Binding YearLabel}"
+                                   FontSize="{DynamicResource TextXs}"
+                                   HorizontalAlignment="Left"
+                                   IsVisible="{Binding HasYear}" />
+                      </StackPanel>
                     </StackPanel>
                   </Button>
                 </DataTemplate>

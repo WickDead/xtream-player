@@ -1,4 +1,4 @@
-using XtreamPlayer.Core.Models;
+﻿using XtreamPlayer.Core.Models;
 
 namespace XtreamPlayer.Core.Library;
 
@@ -47,15 +47,63 @@ public static class CatalogFilter
     /// <summary>
     /// Applies selection, search and sort in one pass.
     /// </summary>
-    public static List<int> Apply(IReadOnlyList<FilterableItem> items, FilterRequest request)
+    public static List<int> Apply(IReadOnlyList<FilterableItem> items, FilterRequest request) =>
+        Apply(items, request, ordering: null);
+
+    /// <summary>
+    /// Applies selection, search and sort, reusing a precomputed sort order.
+    /// </summary>
+    /// <remarks>
+    /// Pass an <see cref="CatalogOrdering"/> built from the same list and this
+    /// becomes a single linear pass. Sorting on every keystroke was what pushed
+    /// a search over the frame budget on a 68,595-item catalog.
+    /// </remarks>
+    public static List<int> Apply(
+        IReadOnlyList<FilterableItem> items, FilterRequest request, CatalogOrdering? ordering)
     {
         ArgumentNullException.ThrowIfNull(items);
         ArgumentNullException.ThrowIfNull(request);
 
-        var matches = new List<FilterableItem>(Math.Min(items.Count, 4096));
-
         var search = request.SearchText?.Trim();
         var hasSearch = !string.IsNullOrEmpty(search) && search.Length >= 2;
+
+        // Recency order comes from the caller's list rather than the catalog, so
+        // it cannot be precomputed and takes the sorting path below.
+        var canUseOrdering = ordering is not null
+            && ReferenceEquals(ordering.Items, items)
+            && request.Selection is not CategorySelection.Recent;
+
+        if (canUseOrdering)
+        {
+            var order = ordering!.For(request.Sort);
+            var ordered = new List<int>(Math.Min(items.Count, 4096));
+
+            // Both sides lowered once, so the per-name comparison is ordinal.
+            var names = hasSearch ? ordering.SearchNames : null;
+            var needle = hasSearch ? search!.ToLowerInvariant() : null;
+
+            foreach (var position in order)
+            {
+                var item = items[position];
+
+                if (!MatchesSelection(item, request))
+                {
+                    continue;
+                }
+
+                if (names is not null
+                    && !names[position].Contains(needle!, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                ordered.Add(item.SourceIndex);
+            }
+
+            return ordered;
+        }
+
+        var matches = new List<FilterableItem>(Math.Min(items.Count, 4096));
 
         foreach (var item in items)
         {
@@ -83,6 +131,7 @@ public static class CatalogFilter
         return indexes;
     }
 
+
     private static bool MatchesSelection(FilterableItem item, FilterRequest request) =>
         request.Selection switch
         {
@@ -104,7 +153,13 @@ public static class CatalogFilter
             case ItemSort.Name:
                 // Natural, not plain alphabetical: catalogs are full of numbered
                 // names and "TSN 10" must not land between "TSN 1" and "TSN 2".
-                items.Sort(static (a, b) => NaturalComparer.Instance.Compare(a.Name, b.Name));
+                // Ties break on catalog position so the order is total; see
+                // CatalogOrdering for why that matters.
+                items.Sort(static (a, b) =>
+                {
+                    var byName = NaturalComparer.Instance.Compare(a.Name, b.Name);
+                    return byName != 0 ? byName : a.SourceIndex.CompareTo(b.SourceIndex);
+                });
                 break;
 
             case ItemSort.Newest:
@@ -114,9 +169,14 @@ public static class CatalogFilter
                     var byDate = (b.Added ?? DateTimeOffset.MinValue)
                         .CompareTo(a.Added ?? DateTimeOffset.MinValue);
 
-                    return byDate != 0
-                        ? byDate
-                        : NaturalComparer.Instance.Compare(a.Name, b.Name);
+                    if (byDate != 0)
+                    {
+                        return byDate;
+                    }
+
+                    var byName = NaturalComparer.Instance.Compare(a.Name, b.Name);
+
+                    return byName != 0 ? byName : a.SourceIndex.CompareTo(b.SourceIndex);
                 });
                 break;
 

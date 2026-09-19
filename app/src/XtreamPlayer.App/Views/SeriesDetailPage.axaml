@@ -1,4 +1,4 @@
-<UserControl xmlns="https://github.com/avaloniaui"
+﻿<UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="clr-namespace:XtreamPlayer.App.ViewModels"
              xmlns:models="clr-namespace:XtreamPlayer.Core.Models;assembly=XtreamPlayer.Core"
@@ -17,10 +17,14 @@
       <StackPanel Grid.Column="1" Margin="22,0,0,0" Spacing="12" MaxWidth="820">
         <TextBlock Classes="h1" Text="{Binding Title}" TextWrapping="Wrap" TextTrimming="None" />
 
+        <TextBlock Classes="muted" Text="{Binding MetaLine}" TextWrapping="Wrap"
+                   IsVisible="{Binding MetaLine, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+
         <StackPanel Orientation="Horizontal" Spacing="10">
           <Button Command="{Binding ToggleFavoriteCommand}"
                   Foreground="{Binding IsFavorite, Converter={x:Static vm:FavoriteBrushConverter.Instance}}"
                   Content="{Binding IsFavorite, Converter={x:Static vm:StarGlyphConverter.Instance}}" />
+          <Button Content="Download season" Command="{Binding DownloadSeasonCommand}" />
           <ComboBox MinWidth="170" ItemsSource="{Binding Seasons}"
                     SelectedItem="{Binding SelectedSeason}">
             <ComboBox.ItemTemplate>
@@ -30,6 +34,9 @@
             </ComboBox.ItemTemplate>
           </ComboBox>
         </StackPanel>
+
+        <TextBlock Classes="muted" Text="{Binding DownloadStatus}"
+                   IsVisible="{Binding DownloadStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
 
         <TextBlock Text="{Binding Plot}" TextWrapping="Wrap" TextTrimming="None" MaxLines="4"
                    Foreground="{DynamicResource TextSecondary}" LineHeight="20" />
@@ -59,9 +66,15 @@
                            HorizontalAlignment="Left" IsVisible="{Binding HasProgress}" />
             </StackPanel>
 
-            <Button Grid.Column="3" Classes="accent" Content="Play" VerticalAlignment="Center"
-                    Command="{Binding $parent[UserControl].((vm:SeriesDetailPageViewModel)DataContext).PlayEpisodeCommand}"
-                    CommandParameter="{Binding}" />
+            <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="6"
+                        VerticalAlignment="Center">
+              <Button Content="Download"
+                      Command="{Binding $parent[UserControl].((vm:SeriesDetailPageViewModel)DataContext).DownloadEpisodeCommand}"
+                      CommandParameter="{Binding}" />
+              <Button Classes="accent" Content="Play"
+                      Command="{Binding $parent[UserControl].((vm:SeriesDetailPageViewModel)DataContext).PlayEpisodeCommand}"
+                      CommandParameter="{Binding}" />
+            </StackPanel>
           </Grid>
         </DataTemplate>
       </ListBox.ItemTemplate>

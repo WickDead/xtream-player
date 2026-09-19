@@ -1,4 +1,4 @@
-using System.Text.RegularExpressions;
+﻿using System.Text.RegularExpressions;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -18,7 +18,7 @@ namespace XtreamPlayer.Tests;
 /// </remarks>
 public sealed class ViewConventionTests(ITestOutputHelper output)
 {
-    private static string ViewsDirectory
+    private static string AppRoot
     {
         get
         {
@@ -31,9 +31,11 @@ public sealed class ViewConventionTests(ITestOutputHelper output)
             }
 
             Assert.NotNull(directory);
-            return Path.Combine(directory!.FullName, "src", "XtreamPlayer.App", "Views");
+            return Path.Combine(directory!.FullName, "src", "XtreamPlayer.App");
         }
     }
+
+    private static string ViewsDirectory => Path.Combine(AppRoot, "Views");
 
     private static IEnumerable<string> ViewFiles() =>
         Directory.EnumerateFiles(ViewsDirectory, "*.axaml", SearchOption.AllDirectories);
@@ -158,5 +160,46 @@ public sealed class ViewConventionTests(ITestOutputHelper output)
               + "from code-behind after the control is attached, or libvlc will open its "
               + "own window.");
         }
+    }
+
+    /// <summary>
+    /// Every page view model must have a case in the view locator.
+    /// </summary>
+    /// <remarks>
+    /// The locator is an explicit switch, which is the right call for a dozen
+    /// pages — but a switch has no compiler check for completeness over a set of
+    /// classes, so a new page silently falls through to the "No view for
+    /// X" placeholder. That is exactly what happened when the Downloads page was
+    /// added: it was registered, routed, and rendered as a line of text.
+    /// </remarks>
+    [Fact]
+    public void EveryPageViewModelIsMappedInTheViewLocator()
+    {
+        var locator = File.ReadAllText(Path.Combine(AppRoot, "ViewLocator.cs"));
+
+        // The whole declaration, so abstract and generic bases can be told apart
+        // from real pages. CatalogBrowseViewModelBase is a generic base class and
+        // has no view of its own.
+        var declaration = new System.Text.RegularExpressions.Regex(
+            @"(?<modifiers>[^\r\n]*?)\bclass\s+(?<name>\w+PageViewModel)(?<generic><)?");
+
+        var viewModels = Directory
+            .EnumerateFiles(Path.Combine(AppRoot, "ViewModels"), "*.cs", SearchOption.AllDirectories)
+            .SelectMany(file => declaration.Matches(File.ReadAllText(file)).Cast<System.Text.RegularExpressions.Match>())
+            .Where(m => !m.Groups["generic"].Success
+                     && !m.Groups["modifiers"].Value.Contains("abstract", StringComparison.Ordinal))
+            .Select(m => m.Groups["name"].Value)
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+
+        Assert.NotEmpty(viewModels);
+
+        var missing = viewModels
+            .Where(name => !locator.Contains(name, StringComparison.Ordinal))
+            .ToList();
+
+        Assert.True(missing.Count == 0,
+            "These page view models have no case in ViewLocator, so they render as a "
+          + "placeholder instead of their view: " + string.Join(", ", missing));
     }
 }
