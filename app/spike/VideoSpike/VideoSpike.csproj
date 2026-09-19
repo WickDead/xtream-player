@@ -1,7 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <OutputType>WinExe</OutputType>
+    <!-- Exe, not WinExe: this is a diagnostic harness. WinExe detaches from the
+         console on Windows, so a startup crash prints nothing anywhere and the
+         app just appears to do nothing. Keep the console. -->
+    <OutputType>Exe</OutputType>
     <RootNamespace>VideoSpike</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <AvaloniaUseCompiledBindingsByDefault>false</AvaloniaUseCompiledBindingsByDefault>

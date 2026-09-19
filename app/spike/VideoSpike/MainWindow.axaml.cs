@@ -30,7 +30,11 @@ public partial class MainWindow : Window
 
     public MainWindow()
     {
-        AvaloniaXamlLoader.Load(this);
+        // InitializeComponent(), NOT AvaloniaXamlLoader.Load(this). Both parse
+        // the XAML, but only InitializeComponent assigns the generated x:Name
+        // fields — with Load() every named control stays null and the first use
+        // is a NullReferenceException.
+        InitializeComponent();
 
         // Diagnostics on from Phase 0: provider-side stream failures are
         // undiagnosable without the libvlc log, and retrofitting it while
