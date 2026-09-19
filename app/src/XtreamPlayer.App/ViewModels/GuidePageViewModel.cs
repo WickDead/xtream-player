@@ -92,9 +92,19 @@ public sealed partial class GuidePageViewModel(
 
     public bool HasRows => Rows.Count > 0;
 
+    /// <summary>
+    /// Deliberately not "N of M channels matched".
+    /// </summary>
+    /// <remarks>
+    /// A provider carries twelve thousand streams and publishes a guide for
+    /// about a thousand. Framing that as "2,636 of 11,967 matched" reads as a
+    /// 22% failure when the matcher actually found a stream for 99% of the
+    /// channels the feed describes. What the user needs to know is how many of
+    /// their channels have listings.
+    /// </remarks>
     public string MatchSummary => TotalChannels == 0
         ? string.Empty
-        : $"{MatchedChannels:N0} of {TotalChannels:N0} channels matched to the guide";
+        : $"{MatchedChannels:N0} channels have guide data";
 
     public override async Task OnNavigatedToAsync(
         object? parameter, bool isNewInstance, CancellationToken ct = default)

@@ -206,9 +206,23 @@ public sealed class EpgService(
 
         var matched = mappings.Count(m => m.IsMatched);
 
+        // Coverage is measured against the FEED, not the channel list. A
+        // provider commonly carries 12,000 streams and publishes a guide for a
+        // thousand of them, so "matched 22% of channels" reads like a failure
+        // when in fact almost every channel the feed describes was found.
+        var feedChannels = candidates.Select(c => c.XmltvId).ToHashSet(StringComparer.Ordinal);
+        var feedCovered = mappings
+            .Where(m => m.XmltvChannelId is not null)
+            .Select(m => m.XmltvChannelId!)
+            .ToHashSet(StringComparer.Ordinal)
+            .Count;
+
         log.LogInformation(
-            "Matched {Matched} of {Total} channels to the guide ({Percent:F0}%).",
-            matched, mappings.Count, matched * 100.0 / Math.Max(1, mappings.Count));
+            "Guide matched {Covered} of {FeedTotal} guide channels ({Percent:F0}%), "
+          + "giving listings to {Matched} of {ChannelTotal} streams.",
+            feedCovered, feedChannels.Count,
+            feedCovered * 100.0 / Math.Max(1, feedChannels.Count),
+            matched, mappings.Count);
     }
 
     public async Task<IReadOnlyDictionary<string, List<EpgProgramme>>> GetGuideAsync(

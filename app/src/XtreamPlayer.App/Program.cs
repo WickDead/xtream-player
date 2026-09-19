@@ -59,6 +59,13 @@ internal static class Program
                 return RunImport(Host, legacyPath);
             }
 
+            // Refreshes the XMLTV guide and reports how well it matched, which
+            // is the number that decides whether the guide is actually useful.
+            if (args.Contains("--refresh-guide", StringComparer.OrdinalIgnoreCase))
+            {
+                return RunGuideRefresh(Host);
+            }
+
             return BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
         }
         catch (Exception ex)
@@ -140,6 +147,100 @@ internal static class Program
                 .GetAwaiter().GetResult();
 
             Console.WriteLine($"Active provider: {best.Name}");
+        }
+
+        return 0;
+    }
+
+    private static int RunGuideRefresh(IHost host)
+    {
+        var profiles = host.Services
+            .GetRequiredService<XtreamPlayer.Core.Abstractions.IProfileRepository>();
+
+        var settings = host.Services
+            .GetRequiredService<XtreamPlayer.Core.Abstractions.ISettingsRepository>();
+
+        var catalog = host.Services
+            .GetRequiredService<XtreamPlayer.Infrastructure.Xtream.ICatalogStore>();
+
+        var epg = host.Services
+            .GetRequiredService<XtreamPlayer.Infrastructure.Epg.IEpgService>();
+
+        var activeId = settings
+            .GetAsync(XtreamPlayer.Core.Abstractions.SettingKeys.ActiveProfileId)
+            .GetAwaiter().GetResult();
+
+        var all = profiles.ListAsync().GetAwaiter().GetResult();
+        var profile = all.FirstOrDefault(p => p.Id == activeId) ?? all.FirstOrDefault();
+
+        if (profile is null)
+        {
+            Console.Error.WriteLine("No provider configured.");
+            return 2;
+        }
+
+        epg.Progress += (_, progress) => Console.WriteLine("  " + progress.Message);
+
+        // The guide is matched against the live catalog, so it has to be loaded.
+        catalog.LoadAsync(profile).GetAwaiter().GetResult();
+
+        var channels = catalog.Current.Live.Items;
+        Console.WriteLine($"Matching against {channels.Count:N0} live channels.");
+
+        epg.RefreshAsync(profile, channels).GetAwaiter().GetResult();
+
+        var scope = new XtreamPlayer.Core.Models.ProfileScope(profile.Id);
+        var state = epg.GetStateAsync(scope).GetAwaiter().GetResult();
+        var mappings = epg.GetMappingsAsync(scope).GetAwaiter().GetResult();
+
+        var matched = mappings.Values.Count(m => m.IsMatched);
+
+        Console.WriteLine();
+        Console.WriteLine($"channels   : {state.ChannelCount:N0}");
+        Console.WriteLine($"programmes : {state.ProgrammeCount:N0}");
+        // Both numbers, because only the first one means anything. A provider
+        // publishes a guide for a fraction of its channels, so coverage of the
+        // FEED is the measure of whether matching worked.
+        var feedCovered = mappings.Values
+            .Where(m => m.XmltvChannelId is not null)
+            .Select(m => m.XmltvChannelId!)
+            .Distinct(StringComparer.Ordinal)
+            .Count();
+
+        Console.WriteLine(
+            $"feed cover : {feedCovered:N0} of {state.ChannelCount:N0} guide channels matched "
+          + $"({feedCovered * 100.0 / Math.Max(1, state.ChannelCount):F1}%)");
+
+        Console.WriteLine(
+            $"streams    : {matched:N0} of {mappings.Count:N0} have listings "
+          + $"({matched * 100.0 / Math.Max(1, mappings.Count):F1}%)");
+
+        foreach (var group in mappings.Values.GroupBy(m => m.Method).OrderByDescending(g => g.Count()))
+        {
+            Console.WriteLine($"  {group.Key,-14} {group.Count():N0}");
+        }
+
+        if (state.Error is { } error)
+        {
+            Console.WriteLine($"error      : {error}");
+        }
+
+        // Prove the stored guide is actually queryable, not just ingested.
+        var now = DateTimeOffset.Now;
+        var guide = epg.GetGuideAsync(scope, now.AddHours(-1), now.AddHours(4))
+            .GetAwaiter().GetResult();
+
+        Console.WriteLine();
+        Console.WriteLine($"channels with listings in the next 4h: {guide.Count:N0}");
+
+        foreach (var (channelId, programmes) in guide.Take(5))
+        {
+            var channel = channels.FirstOrDefault(c => c.Id == channelId);
+            var onNow = programmes.FirstOrDefault(p => p.IsNowPlaying(now));
+
+            Console.WriteLine(
+                $"  {channel?.Name ?? channelId,-38} {programmes.Count,3} listings"
+              + (onNow is null ? string.Empty : $"  now: {onNow.Title}"));
         }
 
         return 0;

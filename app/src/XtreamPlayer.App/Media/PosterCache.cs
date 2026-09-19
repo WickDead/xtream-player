@@ -130,8 +130,12 @@ public sealed class PosterCache : IPosterCache, IDisposable
             {
                 var bytes = await _http.GetByteArrayAsync(url, ct).ConfigureAwait(false);
 
-                if (bytes.Length == 0)
+                // Dead poster hosts routinely answer 200 with an HTML error
+                // page. Caching that means decoding junk now and every time the
+                // tile is shown again, so reject it on the magic bytes.
+                if (!LooksLikeAnImage(bytes))
                 {
+                    _log.LogDebug("Not an image, ignoring: {Url}", url);
                     return null;
                 }
 
@@ -155,9 +159,12 @@ public sealed class PosterCache : IPosterCache, IDisposable
             // Timed out. Common with dead poster hosts, and not worth a warning.
             return null;
         }
-        catch (Exception ex) when (ex is HttpRequestException or IOException or ArgumentException)
+        catch (Exception ex)
         {
-            // A missing or broken poster must never take a grid down.
+            // Total, and for the same reason as DecodeAsync: this task is shared
+            // between every tile wanting the same poster, so anything escaping
+            // here becomes an unobserved task exception on the finalizer thread.
+            // No poster is worth that.
             _log.LogDebug(ex, "Poster unavailable: {Url}", url);
             return null;
         }
@@ -168,8 +175,52 @@ public sealed class PosterCache : IPosterCache, IDisposable
     }
 
     /// <summary>
+    /// The first bytes of the formats a poster can plausibly be.
+    /// </summary>
+    private static bool LooksLikeAnImage(ReadOnlySpan<byte> bytes)
+    {
+        if (bytes.Length < 12)
+        {
+            return false;
+        }
+
+        // JPEG, PNG, GIF, BMP.
+        if (bytes[0] == 0xFF && bytes[1] == 0xD8)
+        {
+            return true;
+        }
+
+        if (bytes is [0x89, (byte)'P', (byte)'N', (byte)'G', ..])
+        {
+            return true;
+        }
+
+        if (bytes is [(byte)'G', (byte)'I', (byte)'F', ..])
+        {
+            return true;
+        }
+
+        if (bytes is [(byte)'B', (byte)'M', ..])
+        {
+            return true;
+        }
+
+        // WebP is "RIFF????WEBP".
+        return bytes is [(byte)'R', (byte)'I', (byte)'F', (byte)'F', _, _, _, _,
+                         (byte)'W', (byte)'E', (byte)'B', (byte)'P', ..];
+    }
+
+    /// <summary>
     /// Decodes off the UI thread, at the size it will actually be drawn.
     /// </summary>
+    /// <remarks>
+    /// Catches everything, deliberately. Skia throws a raw
+    /// NullReferenceException out of ImmutableBitmap's constructor when handed
+    /// something it cannot decode, which is not a documented exception type and
+    /// is not one a narrow catch list would ever include. It escaped as an
+    /// unobserved task exception and was logged as fatal. A broken poster must
+    /// never be able to do that.
+    /// </remarks>
     private static Task<Bitmap?> DecodeAsync(string path, int decodeWidth, CancellationToken ct) =>
         Task.Run<Bitmap?>(() =>
         {
@@ -180,9 +231,9 @@ public sealed class PosterCache : IPosterCache, IDisposable
                 // DecodeToWidth is the whole point: a full-size decode of a
                 // 1000x1500 poster costs ~6 MB to draw at 168 px.
                 return Bitmap.DecodeToWidth(
-                    stream, decodeWidth, BitmapInterpolationMode.HighQuality);
+                    stream, Math.Max(1, decodeWidth), BitmapInterpolationMode.HighQuality);
             }
-            catch (Exception ex) when (ex is IOException or ArgumentException or NotSupportedException)
+            catch (Exception)
             {
                 return null;
             }
