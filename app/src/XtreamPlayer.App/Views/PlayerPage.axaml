@@ -66,8 +66,7 @@
             <StackPanel Orientation="Horizontal" Spacing="14">
               <TextBlock Text="{Binding ResumeBannerText}" VerticalAlignment="Center"
                          Foreground="White" />
-              <Button Content="Start over" Command="{Binding SeekRelativeCommand}"
-                      CommandParameter="-99999" />
+              <Button Content="Start over" Command="{Binding StartOverCommand}" />
             </StackPanel>
           </Border>
 
@@ -116,7 +115,7 @@
 
                 <Button Classes="icon" Content="&#x21BA;" ToolTip.Tip="Back 10s"
                         IsVisible="{Binding !IsLive}"
-                        Command="{Binding SeekRelativeCommand}" CommandParameter="-10" />
+                        Command="{Binding SeekBackCommand}" />
 
                 <Button Classes="icon" FontSize="20" ToolTip.Tip="Play / Pause (Space)"
                         Content="{Binding State, Converter={x:Static vm:PlayPauseGlyphConverter.Instance}}"
@@ -124,7 +123,7 @@
 
                 <Button Classes="icon" Content="&#x21BB;" ToolTip.Tip="Forward 10s"
                         IsVisible="{Binding !IsLive}"
-                        Command="{Binding SeekRelativeCommand}" CommandParameter="10" />
+                        Command="{Binding SeekForwardCommand}" />
 
                 <Button Classes="icon" Content="&#x23ED;" ToolTip.Tip="Next episode"
                         IsVisible="{Binding HasPlaylist}" IsEnabled="{Binding CanGoToNextEpisode}"

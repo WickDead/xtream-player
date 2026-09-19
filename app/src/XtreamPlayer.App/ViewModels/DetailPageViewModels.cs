@@ -89,8 +89,21 @@ public sealed partial class VodDetailPageViewModel(
         return all.FirstOrDefault(p => p.Id == activeId) ?? all.FirstOrDefault();
     }
 
+    /// <summary>Plays from the beginning.</summary>
+    /// <remarks>
+    /// Play and Resume are separate commands rather than one taking a bool.
+    /// A RelayCommand&lt;bool&gt; bound to CommandParameter="True" receives the
+    /// string "True" and throws when the button attaches to the logical tree,
+    /// inside a layout pass, which is fatal.
+    /// </remarks>
     [RelayCommand]
-    private async Task PlayAsync(bool fromStart)
+    private Task PlayAsync() => StartAsync(fromStart: true);
+
+    /// <summary>Picks up from the last saved position.</summary>
+    [RelayCommand]
+    private Task ResumeAsync() => StartAsync(fromStart: false);
+
+    private async Task StartAsync(bool fromStart)
     {
         if (Item is null)
         {

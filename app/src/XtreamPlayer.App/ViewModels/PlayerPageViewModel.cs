@@ -226,9 +226,33 @@ public sealed partial class PlayerPageViewModel : PageViewModelBase
     [RelayCommand]
     private Task TogglePauseAsync() => _playback.TogglePauseAsync();
 
+    /// <summary>
+    /// Seek commands take no parameter, deliberately.
+    /// </summary>
+    /// <remarks>
+    /// A RelayCommand&lt;double&gt; bound to CommandParameter="-10" in XAML
+    /// receives the string "-10", and CommunityToolkit throws
+    /// ArgumentException when the button attaches to the logical tree. That
+    /// happens inside a layout pass, so it is not catchable and takes the
+    /// whole app down before the page is even shown. Parameterless commands
+    /// remove the entire class of bug.
+    /// </remarks>
     [RelayCommand]
-    private Task SeekRelativeAsync(double seconds) =>
-        _playback.SeekRelativeAsync(TimeSpan.FromSeconds(seconds));
+    private Task SeekBackAsync() =>
+        _playback.SeekRelativeAsync(TimeSpan.FromSeconds(-10));
+
+    /// <inheritdoc cref="SeekBackAsync" />
+    [RelayCommand]
+    private Task SeekForwardAsync() =>
+        _playback.SeekRelativeAsync(TimeSpan.FromSeconds(10));
+
+    /// <summary>Restarts the current title from the beginning.</summary>
+    [RelayCommand]
+    private async Task StartOverAsync()
+    {
+        IsResumeBannerVisible = false;
+        await _playback.SeekAsync(TimeSpan.Zero).ConfigureAwait(false);
+    }
 
     public Task SeekToFractionAsync(double fraction) =>
         Duration > TimeSpan.Zero

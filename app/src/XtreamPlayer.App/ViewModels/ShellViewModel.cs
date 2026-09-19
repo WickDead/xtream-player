@@ -179,7 +179,15 @@ public sealed partial class ShellViewModel : ObservableObject
         }
     }
 
+    /// <summary>The toolbar refresh button, which always forces a refetch.</summary>
+    /// <remarks>
+    /// Separate from SyncAsync because a RelayCommand&lt;bool&gt; bound to
+    /// CommandParameter="True" receives the string "True" and throws during
+    /// the layout pass, which is fatal.
+    /// </remarks>
     [RelayCommand]
+    private Task ForceSyncAsync() => SyncAsync(force: true);
+
     public async Task SyncAsync(bool force = false)
     {
         if (ActiveProfile is null || IsSyncing)

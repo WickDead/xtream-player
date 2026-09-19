@@ -26,9 +26,9 @@
 
         <StackPanel Orientation="Horizontal" Spacing="10">
           <Button Classes="accent" Content="Play" Padding="26,9"
-                  Command="{Binding PlayCommand}" CommandParameter="True" />
+                  Command="{Binding PlayCommand}" />
           <Button Content="{Binding ResumeLabel}" IsVisible="{Binding CanResume}"
-                  Command="{Binding PlayCommand}" CommandParameter="False" />
+                  Command="{Binding ResumeCommand}" />
           <Button Command="{Binding ToggleFavoriteCommand}"
                   Foreground="{Binding IsFavorite, Converter={x:Static vm:FavoriteBrushConverter.Instance}}"
                   Content="{Binding IsFavorite, Converter={x:Static vm:StarGlyphConverter.Instance}}" />

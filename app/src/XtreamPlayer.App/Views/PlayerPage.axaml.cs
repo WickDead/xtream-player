@@ -154,12 +154,12 @@ public partial class PlayerPage : UserControl
                 break;
 
             case Key.Left when !vm.IsLive:
-                await vm.SeekRelativeCommand.ExecuteAsync(-10d);
+                await vm.SeekBackCommand.ExecuteAsync(null);
                 e.Handled = true;
                 break;
 
             case Key.Right when !vm.IsLive:
-                await vm.SeekRelativeCommand.ExecuteAsync(10d);
+                await vm.SeekForwardCommand.ExecuteAsync(null);
                 e.Handled = true;
                 break;
 

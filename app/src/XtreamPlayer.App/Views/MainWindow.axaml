@@ -105,7 +105,7 @@
           <Button Grid.Column="4" Classes="icon" Content="&#x21BB;"
                   ToolTip.Tip="Refresh catalogs"
                   IsEnabled="{Binding !IsSyncing}"
-                  Command="{Binding SyncCommand}" CommandParameter="True" />
+                  Command="{Binding ForceSyncCommand}" />
         </Grid>
       </Border>
 
