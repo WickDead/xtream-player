@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>XtreamPlayer.Playback</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../XtreamPlayer.Core/XtreamPlayer.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="LibVLCSharp" />
+    <PackageReference Include="LibVLCSharp.Avalonia" />
+  </ItemGroup>
+
+  <!--
+    Native libvlc is shipped per-platform. There is no Linux NuGet package:
+    Core.Initialize() with no path lets the dynamic loader find the distro's
+    libvlc.so.5, so Linux requires `vlc` + `vlc-plugin-base` to be installed.
+    See VlcLocator for the fallback discovery chain and the error surface.
+  -->
+  <ItemGroup Condition="'$(RuntimeIdentifier)' == '' AND $([MSBuild]::IsOSPlatform('Windows'))">
+    <PackageReference Include="VideoLAN.LibVLC.Windows" />
+  </ItemGroup>
+  <ItemGroup Condition="$(RuntimeIdentifier.StartsWith('win'))">
+    <PackageReference Include="VideoLAN.LibVLC.Windows" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(RuntimeIdentifier)' == '' AND $([MSBuild]::IsOSPlatform('OSX'))">
+    <PackageReference Include="VideoLAN.LibVLC.Mac" />
+  </ItemGroup>
+  <ItemGroup Condition="$(RuntimeIdentifier.StartsWith('osx'))">
+    <PackageReference Include="VideoLAN.LibVLC.Mac" />
+  </ItemGroup>
+
+</Project>

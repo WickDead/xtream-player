@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/spike/">
+    <Project Path="spike/PlaybackSmoke/PlaybackSmoke.csproj" />
+    <Project Path="spike/VideoSpike/VideoSpike.csproj" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/XtreamPlayer.Core/XtreamPlayer.Core.csproj" />
+    <Project Path="src/XtreamPlayer.Playback/XtreamPlayer.Playback.csproj" />
+  </Folder>
+</Solution>

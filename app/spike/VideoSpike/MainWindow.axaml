@@ -1,0 +1,121 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vlc="clr-namespace:LibVLCSharp.Avalonia;assembly=LibVLCSharp.Avalonia"
+        x:Class="VideoSpike.MainWindow"
+        Title="Phase 0 — embedded video spike"
+        Width="1280" Height="820"
+        Background="#101014">
+
+  <!--
+    This is the layout-dodge from the plan, built to be judged.
+
+    VideoView is a NativeControlHost: the video lives in its own native child
+    window that the OS composites on top of anything Avalonia draws in that
+    rect. Controls therefore CANNOT float over it. Instead the chrome occupies
+    its own Grid rows above and below the video, and auto-hide collapses those
+    rows to zero so the video expands to fill.
+
+    The "Overlay probe" button deliberately tries to draw a panel over the
+    video so the airspace failure can be observed rather than taken on faith.
+  -->
+  <Grid RowDefinitions="Auto,Auto,*,Auto,Auto">
+
+    <!-- Row 0: source bar -->
+    <Border Grid.Row="0" Background="#1A1A22" Padding="10,8">
+      <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto">
+        <TextBlock Grid.Column="0" Text="Stream URL" VerticalAlignment="Center"
+                   Margin="0,0,8,0" Foreground="#9AA0B5" />
+        <TextBox Grid.Column="1" x:Name="UrlBox"
+                 Watermark="http://host:port/live/user/pass/12345.ts"
+                 FontFamily="Consolas,monospace" FontSize="12" />
+        <ComboBox Grid.Column="2" x:Name="KindBox" Margin="8,0,0,0" Width="90"
+                  SelectedIndex="0">
+          <ComboBoxItem Content="Live" />
+          <ComboBoxItem Content="VOD" />
+        </ComboBox>
+        <Button Grid.Column="3" x:Name="OpenButton" Content="Open" Margin="8,0,0,0"
+                Click="OnOpenClicked" />
+        <Button Grid.Column="4" x:Name="LocalFileButton" Content="Open file…"
+                Margin="6,0,0,0" Click="OnOpenFileClicked" />
+      </Grid>
+    </Border>
+
+    <!-- Row 1: title bar ABOVE the video. Collapses on auto-hide. -->
+    <Border Grid.Row="1" x:Name="TitleChrome" Background="#15151C" Padding="12,6">
+      <TextBlock x:Name="TitleText" Text="Nothing loaded"
+                 FontSize="14" Foreground="#E6E8F0" />
+    </Border>
+
+    <!-- Row 2: the video surface. Black background matters: the native child
+         window is not created until playback starts, and a non-black gap here
+         reads as a bug. -->
+    <Grid Grid.Row="2" Background="Black">
+      <vlc:VideoView x:Name="Video" />
+
+      <!-- Airspace probe. Visible=false by default; toggling it demonstrates
+           that this panel is hidden BEHIND the video despite being later in
+           z-order. -->
+      <Border x:Name="OverlayProbe" IsVisible="False"
+              Background="#CC202030" CornerRadius="6"
+              HorizontalAlignment="Center" VerticalAlignment="Bottom"
+              Margin="0,0,0,40" Padding="18,12">
+        <TextBlock Foreground="White" TextAlignment="Center"
+                   Text="If you can read this while video is playing,&#10;overlays work and the plan can be revisited." />
+      </Border>
+    </Grid>
+
+    <!-- Row 3: transport BELOW the video. Collapses on auto-hide. -->
+    <Border Grid.Row="3" x:Name="TransportChrome" Background="#15151C" Padding="10,8">
+      <Grid RowDefinitions="Auto,Auto" >
+        <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,6">
+          <TextBlock Grid.Column="0" x:Name="PositionText" Text="0:00"
+                     VerticalAlignment="Center" Width="56"
+                     FontFamily="Consolas,monospace" Foreground="#9AA0B5" />
+          <!-- Hidden entirely for live, which is never seekable. -->
+          <Slider Grid.Column="1" x:Name="SeekSlider" Minimum="0" Maximum="1000"
+                  IsSnapToTickEnabled="False" VerticalAlignment="Center" />
+          <TextBlock Grid.Column="2" x:Name="DurationText" Text="0:00"
+                     VerticalAlignment="Center" Width="56" TextAlignment="Right"
+                     FontFamily="Consolas,monospace" Foreground="#9AA0B5" />
+        </Grid>
+
+        <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="6">
+          <Button x:Name="PlayPauseButton" Content="Play / Pause" Click="OnPlayPauseClicked" />
+          <Button Content="-10s" Click="OnBack10Clicked" />
+          <Button Content="+10s" Click="OnForward10Clicked" />
+          <Button Content="Stop" Click="OnStopClicked" />
+          <Separator Margin="6,0" />
+          <TextBlock Text="Audio" VerticalAlignment="Center" Foreground="#9AA0B5" />
+          <ComboBox x:Name="AudioBox" Width="220"
+                    SelectionChanged="OnAudioSelectionChanged" />
+          <TextBlock Text="Subs" VerticalAlignment="Center" Foreground="#9AA0B5" />
+          <ComboBox x:Name="SubtitleBox" Width="200"
+                    SelectionChanged="OnSubtitleSelectionChanged" />
+          <Button Content="Load .srt…" Click="OnLoadSubtitleClicked" />
+          <Separator Margin="6,0" />
+          <TextBlock Text="Vol" VerticalAlignment="Center" Foreground="#9AA0B5" />
+          <Slider x:Name="VolumeSlider" Width="90" Minimum="0" Maximum="100" Value="80"
+                  VerticalAlignment="Center" />
+        </StackPanel>
+      </Grid>
+    </Border>
+
+    <!-- Row 4: spike instrumentation. Not part of the real app. -->
+    <Border Grid.Row="4" Background="#0C0C10" Padding="10,6">
+      <Grid ColumnDefinitions="*,Auto">
+        <TextBlock Grid.Column="0" x:Name="StatusText"
+                   Text="Idle" FontFamily="Consolas,monospace" FontSize="12"
+                   Foreground="#7F87A0" VerticalAlignment="Center"
+                   TextWrapping="NoWrap" />
+        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
+          <ToggleButton x:Name="AutoHideToggle" Content="Auto-hide chrome"
+                        Click="OnAutoHideToggled" />
+          <ToggleButton x:Name="OverlayToggle" Content="Overlay probe"
+                        Click="OnOverlayToggled" />
+          <ToggleButton x:Name="FullscreenToggle" Content="Fullscreen"
+                        Click="OnFullscreenToggled" />
+        </StackPanel>
+      </Grid>
+    </Border>
+  </Grid>
+</Window>
