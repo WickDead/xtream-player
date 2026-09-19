@@ -1,20 +1,23 @@
 <Application xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:app="clr-namespace:XtreamPlayer.App"
              x:Class="XtreamPlayer.App.App"
              RequestedThemeVariant="Dark">
-  <Application.Styles>
-    <FluentTheme />
-  </Application.Styles>
+
+  <Application.DataTemplates>
+    <app:ViewLocator />
+  </Application.DataTemplates>
 
   <Application.Resources>
-    <!-- Provisional palette. Replaced by the real design pass in Phase 4; it
-         exists now so the shell is not default-Fluent grey. -->
-    <SolidColorBrush x:Key="SurfaceBrush">#101014</SolidColorBrush>
-    <SolidColorBrush x:Key="SurfaceRaisedBrush">#17171F</SolidColorBrush>
-    <SolidColorBrush x:Key="SurfaceSunkenBrush">#0B0B0F</SolidColorBrush>
-    <SolidColorBrush x:Key="TextBrush">#E6E8F0</SolidColorBrush>
-    <SolidColorBrush x:Key="MutedTextBrush">#8B93A8</SolidColorBrush>
-    <SolidColorBrush x:Key="AccentBrush">#4C8DFF</SolidColorBrush>
-    <SolidColorBrush x:Key="WarningBrush">#E0A33E</SolidColorBrush>
+    <ResourceDictionary>
+      <ResourceDictionary.MergedDictionaries>
+        <ResourceInclude Source="avares://XtreamPlayer/Themes/Tokens.axaml" />
+      </ResourceDictionary.MergedDictionaries>
+    </ResourceDictionary>
   </Application.Resources>
+
+  <Application.Styles>
+    <FluentTheme />
+    <StyleInclude Source="avares://XtreamPlayer/Themes/Controls.axaml" />
+  </Application.Styles>
 </Application>

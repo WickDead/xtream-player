@@ -1,0 +1,173 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:XtreamPlayer.App.ViewModels"
+             xmlns:vlc="clr-namespace:LibVLCSharp.Avalonia;assembly=LibVLCSharp.Avalonia"
+             xmlns:pb="clr-namespace:XtreamPlayer.Playback;assembly=XtreamPlayer.Playback"
+             x:Class="XtreamPlayer.App.Views.PlayerPage"
+             x:DataType="vm:PlayerPageViewModel"
+             Background="Black">
+
+  <!--
+    VideoView is a NativeControlHost: the video lives in its own native child
+    window that the OS composites over anything Avalonia draws in that rect. So
+    sibling controls cannot appear on top of it — but VideoView.Content can,
+    because the library hosts that in a separate transparent top-most window it
+    keeps aligned to the video. That is what makes floating OSD possible here.
+
+    VideoView.MediaPlayer is assigned in code-behind after the control is
+    attached, never in XAML: LibVLCSharp.Avalonia only wires MediaPlayer.Hwnd
+    once its native handle exists, and binding earlier silently results in
+    libvlc opening its own separate window.
+  -->
+  <Panel>
+    <vlc:VideoView x:Name="Video">
+
+      <!-- Floating chrome, hosted over the video. -->
+      <Grid RowDefinitions="Auto,*,Auto">
+
+        <!-- Title bar -->
+        <Border Grid.Row="0" Padding="18,12" IsVisible="{Binding ChromeVisible}">
+          <Border.Background>
+            <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+              <GradientStop Color="#CC000000" Offset="0" />
+              <GradientStop Color="#00000000" Offset="1" />
+            </LinearGradientBrush>
+          </Border.Background>
+
+          <Grid ColumnDefinitions="Auto,*,Auto">
+            <Button Grid.Column="0" Classes="icon" Content="&#x2190;" FontSize="18"
+                    ToolTip.Tip="Back (Esc)" Command="{Binding CloseCommand}" />
+
+            <StackPanel Grid.Column="1" Margin="12,0" VerticalAlignment="Center" Spacing="1">
+              <TextBlock Text="{Binding MediaTitle}" FontSize="{DynamicResource TextLg}"
+                         FontWeight="SemiBold" Foreground="White" />
+              <TextBlock Classes="muted" Text="{Binding MediaSubtitle}"
+                         IsVisible="{Binding MediaSubtitle, Converter={x:Static ObjectConverters.IsNotNull}}" />
+            </StackPanel>
+
+            <Border Grid.Column="2" Background="#CCFF5B6E" CornerRadius="3" Padding="7,3"
+                    VerticalAlignment="Center" IsVisible="{Binding IsLive}">
+              <TextBlock Text="LIVE" FontSize="{DynamicResource TextXs}" FontWeight="Bold"
+                         Foreground="White" />
+            </Border>
+          </Grid>
+        </Border>
+
+        <!-- Centre: state, resume banner, errors -->
+        <StackPanel Grid.Row="1" VerticalAlignment="Center" HorizontalAlignment="Center"
+                    Spacing="12">
+
+          <TextBlock HorizontalAlignment="Center" Foreground="White" Opacity="0.85"
+                     FontSize="{DynamicResource TextLg}"
+                     Text="{Binding State, Converter={x:Static vm:StateLabelConverter.Instance}}" />
+
+          <Border Background="#E6141420" CornerRadius="6" Padding="16,12"
+                  IsVisible="{Binding IsResumeBannerVisible}">
+            <StackPanel Orientation="Horizontal" Spacing="14">
+              <TextBlock Text="{Binding ResumeBannerText}" VerticalAlignment="Center"
+                         Foreground="White" />
+              <Button Content="Start over" Command="{Binding SeekRelativeCommand}"
+                      CommandParameter="-99999" />
+            </StackPanel>
+          </Border>
+
+          <Border Background="#E62A1420" CornerRadius="8" Padding="20,16" MaxWidth="560"
+                  IsVisible="{Binding ErrorMessage, Converter={x:Static ObjectConverters.IsNotNull}}">
+            <StackPanel Spacing="10">
+              <TextBlock Text="{Binding ErrorMessage}" TextWrapping="Wrap" TextTrimming="None"
+                         Foreground="White" FontSize="{DynamicResource TextLg}" />
+              <TextBlock Classes="mono" Text="{Binding ErrorDetail}" TextWrapping="Wrap"
+                         TextTrimming="None" MaxHeight="140" Opacity="0.7" />
+              <Button Classes="accent" HorizontalAlignment="Left" Content="Retry"
+                      Command="{Binding RetryCommand}" />
+            </StackPanel>
+          </Border>
+        </StackPanel>
+
+        <!-- Transport -->
+        <Border Grid.Row="2" Padding="18,12,18,14" IsVisible="{Binding ChromeVisible}">
+          <Border.Background>
+            <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+              <GradientStop Color="#00000000" Offset="0" />
+              <GradientStop Color="#E6000000" Offset="1" />
+            </LinearGradientBrush>
+          </Border.Background>
+
+          <StackPanel Spacing="8">
+
+            <!-- Hidden entirely for live, which is never seekable: a dead
+                 control is worse than no control. -->
+            <Grid ColumnDefinitions="Auto,*,Auto" IsVisible="{Binding !IsLive}">
+              <TextBlock Grid.Column="0" Classes="mono" Text="{Binding PositionLabel}"
+                         VerticalAlignment="Center" Width="58" Foreground="White" />
+              <Slider Grid.Column="1" x:Name="SeekSlider" Minimum="0" Maximum="1000"
+                      Value="{Binding ProgressValue, Mode=OneWay}"
+                      IsEnabled="{Binding IsSeekable}" VerticalAlignment="Center" />
+              <TextBlock Grid.Column="2" Classes="mono" Text="{Binding DurationLabel}"
+                         VerticalAlignment="Center" Width="58" TextAlignment="Right"
+                         Foreground="White" />
+            </Grid>
+
+            <Grid ColumnDefinitions="Auto,*,Auto">
+              <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="4">
+                <Button Classes="icon" Content="&#x23EE;" ToolTip.Tip="Previous episode"
+                        IsVisible="{Binding HasPlaylist}" IsEnabled="{Binding CanGoToPreviousEpisode}"
+                        Command="{Binding PreviousEpisodeCommand}" />
+
+                <Button Classes="icon" Content="&#x21BA;" ToolTip.Tip="Back 10s"
+                        IsVisible="{Binding !IsLive}"
+                        Command="{Binding SeekRelativeCommand}" CommandParameter="-10" />
+
+                <Button Classes="icon" FontSize="20" ToolTip.Tip="Play / Pause (Space)"
+                        Content="{Binding State, Converter={x:Static vm:PlayPauseGlyphConverter.Instance}}"
+                        Command="{Binding TogglePauseCommand}" />
+
+                <Button Classes="icon" Content="&#x21BB;" ToolTip.Tip="Forward 10s"
+                        IsVisible="{Binding !IsLive}"
+                        Command="{Binding SeekRelativeCommand}" CommandParameter="10" />
+
+                <Button Classes="icon" Content="&#x23ED;" ToolTip.Tip="Next episode"
+                        IsVisible="{Binding HasPlaylist}" IsEnabled="{Binding CanGoToNextEpisode}"
+                        Command="{Binding NextEpisodeCommand}" />
+              </StackPanel>
+
+              <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8"
+                          HorizontalAlignment="Center" VerticalAlignment="Center">
+                <TextBlock Classes="muted" Text="Audio" VerticalAlignment="Center" />
+                <ComboBox MinWidth="190" ItemsSource="{Binding AudioTracks}"
+                          SelectedItem="{Binding SelectedAudioTrack}">
+                  <ComboBox.ItemTemplate>
+                    <DataTemplate x:DataType="pb:TrackOption">
+                      <TextBlock Text="{Binding Label}" />
+                    </DataTemplate>
+                  </ComboBox.ItemTemplate>
+                </ComboBox>
+
+                <TextBlock Classes="muted" Text="Subtitles" VerticalAlignment="Center" />
+                <ComboBox MinWidth="170" ItemsSource="{Binding SubtitleTracks}"
+                          SelectedItem="{Binding SelectedSubtitleTrack}">
+                  <ComboBox.ItemTemplate>
+                    <DataTemplate x:DataType="pb:TrackOption">
+                      <TextBlock Text="{Binding Label}" />
+                    </DataTemplate>
+                  </ComboBox.ItemTemplate>
+                </ComboBox>
+
+                <Button Classes="ghost" Content="Load .srt" x:Name="LoadSubtitleButton" />
+              </StackPanel>
+
+              <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6">
+                <Button Classes="icon" Content="&#x1F507;" ToolTip.Tip="Mute (M)"
+                        Command="{Binding ToggleMuteCommand}" />
+                <Slider Width="90" Minimum="0" Maximum="100" VerticalAlignment="Center"
+                        Value="{Binding Volume, Mode=TwoWay}" />
+                <Button Classes="icon" Content="&#x26F6;" ToolTip.Tip="Fullscreen (F)"
+                        x:Name="FullscreenButton" />
+              </StackPanel>
+            </Grid>
+          </StackPanel>
+        </Border>
+      </Grid>
+    </vlc:VideoView>
+  </Panel>
+</UserControl>

@@ -1,0 +1,86 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <!--
+    Design tokens.
+
+    A media browser is looked at in a dark room for hours, so the palette is
+    built around a near-black neutral ramp with a single saturated accent.
+    Posters supply all the colour; the chrome must not compete with them.
+
+    Surfaces step in luminance rather than using borders, which keeps a dense
+    three-column layout readable without a grid of lines everywhere.
+  -->
+
+  <!-- Neutral ramp, darkest to lightest -->
+  <Color x:Key="Neutral950">#08080B</Color>
+  <Color x:Key="Neutral900">#0E0E13</Color>
+  <Color x:Key="Neutral850">#14141B</Color>
+  <Color x:Key="Neutral800">#1B1B24</Color>
+  <Color x:Key="Neutral750">#23232E</Color>
+  <Color x:Key="Neutral700">#2D2D3A</Color>
+  <Color x:Key="Neutral600">#3D3D4D</Color>
+  <Color x:Key="Neutral500">#5A5A70</Color>
+  <Color x:Key="Neutral400">#8087A0</Color>
+  <Color x:Key="Neutral300">#A8AEC4</Color>
+  <Color x:Key="Neutral200">#CBD0E0</Color>
+  <Color x:Key="Neutral100">#E8EAF2</Color>
+
+  <Color x:Key="AccentColor">#5B8CFF</Color>
+  <Color x:Key="AccentColorDim">#3A63C4</Color>
+  <Color x:Key="FavoriteColor">#FFC44D</Color>
+  <Color x:Key="LiveColor">#FF5B6E</Color>
+  <Color x:Key="SuccessColor">#4ED09A</Color>
+  <Color x:Key="WarningColor">#E0A33E</Color>
+
+  <SolidColorBrush x:Key="AppBackground" Color="{StaticResource Neutral900}" />
+  <SolidColorBrush x:Key="SurfaceSunken" Color="{StaticResource Neutral950}" />
+  <SolidColorBrush x:Key="Surface" Color="{StaticResource Neutral850}" />
+  <SolidColorBrush x:Key="SurfaceRaised" Color="{StaticResource Neutral800}" />
+  <SolidColorBrush x:Key="SurfaceHover" Color="{StaticResource Neutral750}" />
+  <SolidColorBrush x:Key="SurfaceActive" Color="{StaticResource Neutral700}" />
+
+  <SolidColorBrush x:Key="Divider" Color="{StaticResource Neutral800}" />
+  <SolidColorBrush x:Key="Border" Color="{StaticResource Neutral700}" />
+
+  <SolidColorBrush x:Key="TextPrimary" Color="{StaticResource Neutral100}" />
+  <SolidColorBrush x:Key="TextSecondary" Color="{StaticResource Neutral300}" />
+  <SolidColorBrush x:Key="TextMuted" Color="{StaticResource Neutral400}" />
+  <SolidColorBrush x:Key="TextDisabled" Color="{StaticResource Neutral500}" />
+
+  <SolidColorBrush x:Key="Accent" Color="{StaticResource AccentColor}" />
+  <SolidColorBrush x:Key="AccentDim" Color="{StaticResource AccentColorDim}" />
+  <SolidColorBrush x:Key="AccentSubtle" Color="{StaticResource AccentColor}" Opacity="0.14" />
+  <SolidColorBrush x:Key="Favorite" Color="{StaticResource FavoriteColor}" />
+  <SolidColorBrush x:Key="LiveDot" Color="{StaticResource LiveColor}" />
+  <SolidColorBrush x:Key="Success" Color="{StaticResource SuccessColor}" />
+  <SolidColorBrush x:Key="Warning" Color="{StaticResource WarningColor}" />
+
+  <!-- Poster placeholder, so an unloaded tile is not a bright hole -->
+  <SolidColorBrush x:Key="PosterPlaceholder" Color="{StaticResource Neutral800}" />
+
+  <!-- Type scale. One family, five sizes; a browser needs hierarchy, not variety. -->
+  <x:Double x:Key="TextXs">11</x:Double>
+  <x:Double x:Key="TextSm">12</x:Double>
+  <x:Double x:Key="TextMd">13</x:Double>
+  <x:Double x:Key="TextLg">15</x:Double>
+  <x:Double x:Key="TextXl">19</x:Double>
+  <x:Double x:Key="TextXxl">26</x:Double>
+
+  <!-- Spacing, on a 4px rhythm -->
+  <Thickness x:Key="PagePadding">20,16</Thickness>
+  <Thickness x:Key="CardPadding">12</Thickness>
+  <CornerRadius x:Key="RadiusSm">4</CornerRadius>
+  <CornerRadius x:Key="RadiusMd">8</CornerRadius>
+  <CornerRadius x:Key="RadiusLg">12</CornerRadius>
+
+  <!-- Poster geometry. 2:3 is the standard movie poster ratio; keeping tiles
+       uniform is also what makes scroll restoration exact arithmetic. -->
+  <x:Double x:Key="PosterWidth">168</x:Double>
+  <x:Double x:Key="PosterHeight">252</x:Double>
+  <x:Double x:Key="PosterTileHeight">300</x:Double>
+
+  <x:Double x:Key="RowHeight">34</x:Double>
+  <x:Double x:Key="RailWidth">248</x:Double>
+
+</ResourceDictionary>

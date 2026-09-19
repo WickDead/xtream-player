@@ -23,6 +23,11 @@ public partial class App : Application
             // captures SynchronizationContext.Current at construction so its
             // events arrive already marshalled; resolving it from a background
             // thread would silently lose that.
+            // The poster cache is handed to AsyncImage statically: the control
+            // is created thousands of times in a grid and must not resolve a
+            // service on every construction.
+            Media.AsyncImage.Cache = services.GetRequiredService<Media.IPosterCache>();
+
             var shell = services.GetRequiredService<ShellViewModel>();
 
             desktop.MainWindow = new MainWindow { DataContext = shell };

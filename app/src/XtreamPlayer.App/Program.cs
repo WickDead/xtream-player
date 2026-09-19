@@ -52,6 +52,13 @@ internal static class Program
 
             Host = BuildHost(verbose);
 
+            // Headless import, for first-run setup without the UI and for
+            // verifying the importer against a real database.
+            if (TryGetOption(args, "--import") is { } legacyPath)
+            {
+                return RunImport(Host, legacyPath);
+            }
+
             return BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
         }
         catch (Exception ex)
@@ -64,6 +71,78 @@ internal static class Program
             Host?.Dispose();
             Log.CloseAndFlush();
         }
+    }
+
+    private static string? TryGetOption(string[] args, string name)
+    {
+        var index = Array.FindIndex(args, a => string.Equals(a, name, StringComparison.OrdinalIgnoreCase));
+        return index >= 0 && index + 1 < args.Length ? args[index + 1] : null;
+    }
+
+    private static int RunImport(IHost host, string legacyPath)
+    {
+        if (!File.Exists(legacyPath))
+        {
+            Console.Error.WriteLine($"No such database: {legacyPath}");
+            return 2;
+        }
+
+        var importer = host.Services
+            .GetRequiredService<XtreamPlayer.Infrastructure.Migration.LegacyImporter>();
+
+        var settings = host.Services
+            .GetRequiredService<XtreamPlayer.Core.Abstractions.ISettingsRepository>();
+
+        var profiles = host.Services
+            .GetRequiredService<XtreamPlayer.Core.Abstractions.IProfileRepository>();
+
+        var favorites = host.Services
+            .GetRequiredService<XtreamPlayer.Core.Abstractions.IFavoritesRepository>();
+
+        var result = importer.ImportAsync(legacyPath).GetAwaiter().GetResult();
+
+        Console.WriteLine(
+            $"Imported {result.ProfilesImported} provider(s), "
+          + $"{result.FavoritesImported} favorite(s), "
+          + $"{result.ResumeImported} resume entr(ies). "
+          + $"{result.DemoRowsSkipped} demo row(s) skipped.");
+
+        foreach (var warning in result.Warnings)
+        {
+            Console.WriteLine($"  warning: {warning}");
+        }
+
+        // Activate the provider that actually has favorites, not just the first
+        // row imported.
+        var all = profiles.ListAsync().GetAwaiter().GetResult();
+        XtreamPlayer.Core.Models.Profile? best = null;
+        var bestCount = -1;
+
+        foreach (var profile in all)
+        {
+            var count = favorites
+                .ListAsync(new XtreamPlayer.Core.Models.ProfileScope(profile.Id))
+                .GetAwaiter().GetResult().Count;
+
+            Console.WriteLine($"  {profile.Name}: {count} favorite(s) at {profile.ServerUrl}");
+
+            if (count > bestCount)
+            {
+                bestCount = count;
+                best = profile;
+            }
+        }
+
+        if (best is not null)
+        {
+            settings.SetAsync(
+                XtreamPlayer.Core.Abstractions.SettingKeys.ActiveProfileId, best.Id)
+                .GetAwaiter().GetResult();
+
+            Console.WriteLine($"Active provider: {best.Name}");
+        }
+
+        return 0;
     }
 
     private static IHost BuildHost(bool verbose) =>

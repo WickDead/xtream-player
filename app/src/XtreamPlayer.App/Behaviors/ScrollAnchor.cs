@@ -230,8 +230,8 @@ public static class ScrollAnchor
 
     private static ScrollViewer? FindScrollViewer(Control control) => control switch
     {
-        ListBox listBox => listBox.Scroll as ScrollViewer,
         ScrollViewer scroller => scroller,
+        ListBox listBox => listBox.Scroll as ScrollViewer,
         _ => control.FindDescendantOfType<ScrollViewer>(),
     };
 
@@ -239,6 +239,7 @@ public static class ScrollAnchor
     {
         ItemsControl items => items.ItemsSource as System.Collections.IList
                               ?? (System.Collections.IList?)items.Items,
+        ScrollViewer { Content: Control inner } => ItemsOf(inner),
         _ => null,
     };
 

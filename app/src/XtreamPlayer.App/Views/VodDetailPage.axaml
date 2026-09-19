@@ -1,0 +1,53 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:XtreamPlayer.App.ViewModels"
+             xmlns:media="clr-namespace:XtreamPlayer.App.Media"
+             x:Class="XtreamPlayer.App.Views.VodDetailPage"
+             x:DataType="vm:VodDetailPageViewModel">
+
+  <ScrollViewer>
+    <Grid ColumnDefinitions="Auto,*" Margin="28" >
+
+      <media:AsyncImage Grid.Column="0" Width="300" Height="450" VerticalAlignment="Top"
+                        Source="{Binding Item.PosterUrl}" DecodeWidth="360"
+                        Stretch="UniformToFill" CornerRadius="10"
+                        Placeholder="{DynamicResource PosterPlaceholder}" />
+
+      <StackPanel Grid.Column="1" Margin="28,0,0,0" Spacing="16" MaxWidth="760">
+
+        <TextBlock Classes="h1" Text="{Binding Item.Name}" TextWrapping="Wrap" TextTrimming="None" />
+
+        <StackPanel Orientation="Horizontal" Spacing="16">
+          <TextBlock Classes="muted" Text="{Binding Detail.ReleaseDate}" />
+          <TextBlock Classes="muted" Text="{Binding Detail.DurationLabel}" />
+          <TextBlock Classes="muted" Text="{Binding Detail.Quality}" />
+          <TextBlock Foreground="{DynamicResource Favorite}" Text="{Binding Detail.Rating}" />
+        </StackPanel>
+
+        <StackPanel Orientation="Horizontal" Spacing="10">
+          <Button Classes="accent" Content="Play" Padding="26,9"
+                  Command="{Binding PlayCommand}" CommandParameter="True" />
+          <Button Content="{Binding ResumeLabel}" IsVisible="{Binding CanResume}"
+                  Command="{Binding PlayCommand}" CommandParameter="False" />
+          <Button Command="{Binding ToggleFavoriteCommand}"
+                  Foreground="{Binding IsFavorite, Converter={x:Static vm:FavoriteBrushConverter.Instance}}"
+                  Content="{Binding IsFavorite, Converter={x:Static vm:StarGlyphConverter.Instance}}" />
+        </StackPanel>
+
+        <TextBlock Text="{Binding Detail.Plot}" TextWrapping="Wrap" TextTrimming="None"
+                   Foreground="{DynamicResource TextSecondary}" LineHeight="21" />
+
+        <StackPanel Spacing="6">
+          <TextBlock Classes="muted" Text="{Binding Detail.Genre, StringFormat='Genre: {0}'}" />
+          <TextBlock Classes="muted" Text="{Binding Detail.Director, StringFormat='Director: {0}'}" />
+          <TextBlock Classes="muted" Text="{Binding Detail.Cast, StringFormat='Cast: {0}'}"
+                     TextWrapping="Wrap" TextTrimming="None" />
+        </StackPanel>
+
+        <TextBlock Foreground="{DynamicResource Warning}" TextWrapping="Wrap"
+                   Text="{Binding Error}"
+                   IsVisible="{Binding Error, Converter={x:Static ObjectConverters.IsNotNull}}" />
+      </StackPanel>
+    </Grid>
+  </ScrollViewer>
+</UserControl>
