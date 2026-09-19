@@ -5,6 +5,10 @@
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/XtreamPlayer.Core/XtreamPlayer.Core.csproj" />
+    <Project Path="src/XtreamPlayer.Infrastructure/XtreamPlayer.Infrastructure.csproj" />
     <Project Path="src/XtreamPlayer.Playback/XtreamPlayer.Playback.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/XtreamPlayer.Tests/XtreamPlayer.Tests.csproj" />
   </Folder>
 </Solution>
