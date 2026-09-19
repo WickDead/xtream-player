@@ -21,6 +21,7 @@ public sealed class ViewLocator : IDataTemplate
         DashboardPageViewModel => new DashboardPage(),
         ProvidersPageViewModel => new ProvidersPage(),
         LivePageViewModel => new LivePage(),
+        GuidePageViewModel => new GuidePage(),
         VodPageViewModel => new VodPage(),
         VodDetailPageViewModel => new VodDetailPage(),
         SeriesPageViewModel => new SeriesPage(),

@@ -1,0 +1,104 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:XtreamPlayer.App.ViewModels"
+             xmlns:ctl="clr-namespace:XtreamPlayer.App.Controls"
+             x:Class="XtreamPlayer.App.Views.GuidePage"
+             x:DataType="vm:GuidePageViewModel">
+
+  <Grid RowDefinitions="Auto,*,Auto">
+
+    <!-- Toolbar -->
+    <Border Grid.Row="0" Background="{DynamicResource Surface}" Padding="14,10">
+      <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto">
+        <Button Grid.Column="0" Content="Now" ToolTip.Tip="Jump to the current time (Home)"
+                x:Name="NowButton" />
+
+        <ComboBox Grid.Column="1" Margin="8,0" MinWidth="110"
+                  ItemsSource="{Binding ZoomLevels}"
+                  SelectedItem="{Binding Zoom}"
+                  ToolTip.Tip="Time visible across the grid">
+          <ComboBox.ItemTemplate>
+            <DataTemplate x:DataType="vm:ZoomLevel">
+              <TextBlock Text="{Binding Label}" />
+            </DataTemplate>
+          </ComboBox.ItemTemplate>
+        </ComboBox>
+
+        <CheckBox Grid.Column="2" Content="Favorites only" Margin="8,0"
+                  IsChecked="{Binding FavoritesOnly, Mode=TwoWay}" />
+
+        <TextBlock Grid.Column="3" Classes="muted" VerticalAlignment="Center" Margin="14,0"
+                   Text="{Binding MatchSummary}" />
+
+        <Button Grid.Column="4" Content="Refresh guide"
+                IsEnabled="{Binding !IsRefreshing}"
+                Command="{Binding RefreshCommand}" />
+      </Grid>
+    </Border>
+
+    <!--
+      Channel column, time ruler and programme canvas are three separate
+      controls kept in sync by the canvas's offset, rather than one scrolling
+      surface. That way the channel names stay pinned while the grid scrolls
+      horizontally, and the ruler stays pinned while it scrolls vertically.
+    -->
+    <Grid Grid.Row="1" ColumnDefinitions="220,*" RowDefinitions="Auto,*">
+
+      <Border Grid.Row="0" Grid.Column="0" Background="{DynamicResource SurfaceSunken}"
+              Height="34" />
+
+      <!-- Time ruler, scrolled horizontally in step with the canvas. -->
+      <Border Grid.Row="0" Grid.Column="1" Background="{DynamicResource SurfaceSunken}"
+              Height="34" ClipToBounds="True">
+        <ctl:EpgTimeRuler x:Name="Ruler" />
+      </Border>
+
+      <!-- Channel names, scrolled vertically in step with the canvas. -->
+      <Border Grid.Row="1" Grid.Column="0" Background="{DynamicResource Surface}"
+              ClipToBounds="True">
+        <ctl:EpgChannelColumn x:Name="Channels" />
+      </Border>
+
+      <ScrollViewer Grid.Row="1" Grid.Column="1"
+                    HorizontalScrollBarVisibility="Auto"
+                    VerticalScrollBarVisibility="Auto">
+        <ctl:EpgTimelineCanvas x:Name="Timeline"
+                               Rows="{Binding Rows}"
+                               WindowStart="{Binding WindowStart}"
+                               PixelsPerMinute="{Binding PixelsPerMinute}"
+                               WindowLength="{Binding WindowLength}" />
+      </ScrollViewer>
+
+      <!-- Shown while there is nothing to draw, so the grid is never just a
+           black rectangle with no explanation. -->
+      <Border Grid.Row="1" Grid.Column="1" Background="{DynamicResource SurfaceSunken}"
+              IsVisible="{Binding !HasRows}">
+        <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="10">
+          <TextBlock Classes="h3" HorizontalAlignment="Center" Text="No guide data" />
+          <TextBlock Classes="muted" HorizontalAlignment="Center" MaxWidth="420"
+                     TextWrapping="Wrap" TextTrimming="None"
+                     Text="This provider may not publish an XMLTV guide. Live TV still shows now and next for each channel." />
+          <Button Classes="accent" HorizontalAlignment="Center" Content="Refresh guide"
+                  Command="{Binding RefreshCommand}" />
+        </StackPanel>
+      </Border>
+    </Grid>
+
+    <!-- Detail for the selected programme. -->
+    <Border Grid.Row="2" Background="{DynamicResource Surface}" Padding="14,10"
+            IsVisible="{Binding SelectedProgramme, Converter={x:Static ObjectConverters.IsNotNull}}">
+      <Grid ColumnDefinitions="*,Auto">
+        <StackPanel Grid.Column="0" Spacing="3">
+          <TextBlock Classes="h3" Text="{Binding SelectedProgramme.Title}" />
+          <TextBlock Classes="muted">
+            <Run Text="{Binding SelectedChannelName}" />
+          </TextBlock>
+          <TextBlock Classes="muted" MaxLines="2" TextWrapping="Wrap"
+                     Text="{Binding SelectedProgramme.Description}" />
+        </StackPanel>
+        <Button Grid.Column="1" Classes="accent" Content="Watch" VerticalAlignment="Center"
+                Command="{Binding PlaySelectedCommand}" />
+      </Grid>
+    </Border>
+  </Grid>
+</UserControl>

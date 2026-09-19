@@ -4,6 +4,7 @@ using XtreamPlayer.App.ViewModels;
 using XtreamPlayer.Core.Abstractions;
 using XtreamPlayer.Core.Library;
 using XtreamPlayer.Core.Navigation;
+using XtreamPlayer.Infrastructure.Epg;
 using XtreamPlayer.Infrastructure.Migration;
 using XtreamPlayer.Infrastructure.Persistence;
 using XtreamPlayer.Infrastructure.Security;
@@ -33,6 +34,8 @@ public static class ServiceRegistration
         // ---- provider ----
         services.AddXtreamHttp();
         services.AddSingleton<ICatalogStore, CatalogStore>();
+        services.AddSingleton<IEpgRepository, EpgRepository>();
+        services.AddSingleton<IEpgService, EpgService>();
         services.AddSingleton<IFavoritesStore, FavoritesStore>();
 
         // Posters get their own client: a separate connection pool keeps a burst
@@ -66,6 +69,7 @@ public static class ServiceRegistration
         services.AddTransient<SeriesDetailPageViewModel>();
         services.AddTransient<PlayerPageViewModel>();
         services.AddTransient<SettingsPageViewModel>();
+        services.AddTransient<GuidePageViewModel>();
 
         services.AddSingleton<INavigationService>(provider =>
             new NavigationService(route => CreatePage(provider, route)));
@@ -93,9 +97,10 @@ public static class ServiceRegistration
         PageKey.SeriesDetail => provider.GetRequiredService<SeriesDetailPageViewModel>(),
         PageKey.Player => provider.GetRequiredService<PlayerPageViewModel>(),
         PageKey.Settings => provider.GetRequiredService<SettingsPageViewModel>(),
+        PageKey.Guide => provider.GetRequiredService<GuidePageViewModel>(),
 
-        // Guide and Downloads land in later phases; until then they are the
-        // dashboard rather than a crash.
+        // Downloads lands in a later phase; until then it is the dashboard
+        // rather than a crash.
         _ => provider.GetRequiredService<DashboardPageViewModel>(),
     };
 }
