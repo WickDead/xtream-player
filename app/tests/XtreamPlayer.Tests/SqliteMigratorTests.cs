@@ -199,3 +199,148 @@ public sealed class SqliteMigratorTests
         return results;
     }
 }
+
+/// <summary>
+/// The data directory is not guaranteed to be empty. A discarded prototype left
+/// a database at exactly the path this app uses, with colliding table names but
+/// a different shape.
+/// </summary>
+public sealed class ForeignDatabaseGuardTests
+{
+    private static string NewDirectory()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "xp-guard-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(path);
+        return path;
+    }
+
+    private static void Create(string path, string sql)
+    {
+        using var connection = new SqliteConnection($"Data Source={path}");
+        connection.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = sql;
+        command.ExecuteNonQuery();
+        SqliteConnection.ClearPool(connection);
+    }
+
+    [Fact]
+    public void LeavesAMissingFileAlone()
+    {
+        var directory = NewDirectory();
+        var path = Path.Combine(directory, "nothing.sqlite");
+
+        Assert.Null(ForeignDatabaseGuard.QuarantineIfForeign(path));
+
+        Directory.Delete(directory, true);
+    }
+
+    [Fact]
+    public void LeavesAnUnrelatedDatabaseAlone()
+    {
+        var directory = NewDirectory();
+        var path = Path.Combine(directory, "other.sqlite");
+        Create(path, "CREATE TABLE unrelated (id INTEGER PRIMARY KEY);");
+
+        Assert.Null(ForeignDatabaseGuard.QuarantineIfForeign(path));
+        Assert.True(File.Exists(path));
+
+        Directory.Delete(directory, true);
+    }
+
+    [Fact]
+    public void LeavesOurOwnMigratedDatabaseAlone()
+    {
+        var directory = NewDirectory();
+        var path = Path.Combine(directory, DatabasePaths.DatabaseFileName);
+
+        using (var connection = new SqliteConnection($"Data Source={path}"))
+        {
+            connection.Open();
+            new SqliteMigrator().Migrate(connection);
+        }
+
+        SqliteConnection.ClearAllPools();
+
+        Assert.Null(ForeignDatabaseGuard.QuarantineIfForeign(path));
+
+        Directory.Delete(directory, true);
+    }
+
+    [Fact]
+    public void QuarantinesAPrototypeDatabaseWithCollidingTables()
+    {
+        var directory = NewDirectory();
+        var path = Path.Combine(directory, DatabasePaths.DatabaseFileName);
+
+        // The real prototype's shape: its own versioning table and integer ids.
+        Create(path, """
+            CREATE TABLE schema_versions (id INTEGER PRIMARY KEY, version INTEGER);
+            CREATE TABLE profiles (id INTEGER PRIMARY KEY, name TEXT);
+            CREATE TABLE favorites (id INTEGER PRIMARY KEY);
+            """);
+
+        var result = ForeignDatabaseGuard.QuarantineIfForeign(path);
+
+        Assert.NotNull(result);
+        Assert.Contains("profiles", result.Reason, StringComparison.Ordinal);
+        Assert.False(File.Exists(path));
+        Assert.True(File.Exists(result.BackupPath));
+
+        // Nothing is ever deleted.
+        Assert.Contains(".bak.", result.BackupPath, StringComparison.Ordinal);
+
+        Directory.Delete(directory, true);
+    }
+
+    /// <summary>
+    /// The migration runner creates schema_version before the migration loop and
+    /// commits it outside the per-script transaction. So a FAILED run against a
+    /// foreign database leaves an empty version table behind. Treating that as
+    /// proof of ownership would make the failure permanent: the guard skips,
+    /// migration 001 collides again, and the app can never start.
+    /// </summary>
+    [Fact]
+    public void QuarantinesEvenAfterAFailedRunStampedAnEmptyVersionTable()
+    {
+        var directory = NewDirectory();
+        var path = Path.Combine(directory, DatabasePaths.DatabaseFileName);
+
+        Create(path, """
+            CREATE TABLE profiles (id INTEGER PRIMARY KEY, name TEXT);
+            CREATE TABLE schema_version (
+                version INTEGER NOT NULL PRIMARY KEY, name TEXT, applied_at TEXT NOT NULL);
+            """);
+
+        var result = ForeignDatabaseGuard.QuarantineIfForeign(path);
+
+        Assert.NotNull(result);
+        Assert.Contains("no applied migration", result.Reason, StringComparison.Ordinal);
+        Assert.False(File.Exists(path));
+
+        Directory.Delete(directory, true);
+    }
+
+    [Fact]
+    public void MovesWalSidecarsWithTheDatabase()
+    {
+        var directory = NewDirectory();
+        var path = Path.Combine(directory, DatabasePaths.DatabaseFileName);
+
+        Create(path, "CREATE TABLE profiles (id INTEGER PRIMARY KEY);");
+
+        // Sidecars belong to the file they were written for; leaving them
+        // behind would corrupt the fresh database.
+        File.WriteAllText(path + "-wal", "stale");
+        File.WriteAllText(path + "-shm", "stale");
+
+        var result = ForeignDatabaseGuard.QuarantineIfForeign(path);
+
+        Assert.NotNull(result);
+        Assert.False(File.Exists(path + "-wal"));
+        Assert.False(File.Exists(path + "-shm"));
+        Assert.True(File.Exists(result.BackupPath + "-wal"));
+
+        Directory.Delete(directory, true);
+    }
+}

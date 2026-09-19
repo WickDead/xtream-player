@@ -4,6 +4,7 @@
     <Project Path="spike/VideoSpike/VideoSpike.csproj" />
   </Folder>
   <Folder Name="/src/">
+    <Project Path="src/XtreamPlayer.App/XtreamPlayer.App.csproj" />
     <Project Path="src/XtreamPlayer.Core/XtreamPlayer.Core.csproj" />
     <Project Path="src/XtreamPlayer.Infrastructure/XtreamPlayer.Infrastructure.csproj" />
     <Project Path="src/XtreamPlayer.Playback/XtreamPlayer.Playback.csproj" />

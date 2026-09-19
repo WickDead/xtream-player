@@ -1,0 +1,189 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="clr-namespace:XtreamPlayer.App.ViewModels"
+        xmlns:mig="clr-namespace:XtreamPlayer.Infrastructure.Migration;assembly=XtreamPlayer.Infrastructure"
+        x:Class="XtreamPlayer.App.Views.MainWindow"
+        x:DataType="vm:ShellViewModel"
+        Title="Xtream Player"
+        Width="1280" Height="860"
+        MinWidth="960" MinHeight="600"
+        Background="{DynamicResource SurfaceBrush}">
+
+  <!--
+    Phase 1 shell. Its job is to prove the stack end to end: migrations ran,
+    repositories read, credentials round-tripped, and the legacy importer can
+    see the previous app's data. The real screens and the navigation stack
+    arrive in Phase 3.
+  -->
+  <Grid RowDefinitions="Auto,*,Auto" Margin="0">
+
+    <Border Grid.Row="0" Background="{DynamicResource SurfaceRaisedBrush}" Padding="20,14">
+      <StackPanel Spacing="2">
+        <TextBlock Text="Xtream Player" FontSize="20" FontWeight="SemiBold"
+                   Foreground="{DynamicResource TextBrush}" />
+        <TextBlock Text="Avalonia rewrite - Phase 1 (persistence)"
+                   Foreground="{DynamicResource MutedTextBrush}" FontSize="12" />
+      </StackPanel>
+    </Border>
+
+    <ScrollViewer Grid.Row="1" Padding="20,16">
+      <StackPanel Spacing="18" MaxWidth="900" HorizontalAlignment="Left">
+
+        <!-- Shown only when a pre-existing database had to be moved aside. -->
+        <Border IsVisible="{Binding QuarantineNotice, Converter={x:Static ObjectConverters.IsNotNull}}"
+                Background="{DynamicResource SurfaceRaisedBrush}"
+                BorderBrush="{DynamicResource WarningBrush}" BorderThickness="1"
+                CornerRadius="6" Padding="16">
+          <StackPanel Spacing="6">
+            <TextBlock Text="An existing database was set aside" FontWeight="SemiBold"
+                       FontSize="15" Foreground="{DynamicResource WarningBrush}" />
+            <TextBlock Text="{Binding QuarantineNotice}" TextWrapping="Wrap"
+                       FontSize="12" Foreground="{DynamicResource TextBrush}" />
+          </StackPanel>
+        </Border>
+
+        <!-- Import offer. Only shown before the one-time import has run. -->
+        <Border IsVisible="{Binding HasLegacyDatabases}"
+                Background="{DynamicResource SurfaceRaisedBrush}"
+                BorderBrush="{DynamicResource WarningBrush}" BorderThickness="1"
+                CornerRadius="6" Padding="16">
+          <StackPanel Spacing="10">
+            <TextBlock Text="Import from the previous version"
+                       FontWeight="SemiBold" FontSize="15"
+                       Foreground="{DynamicResource TextBrush}" />
+            <TextBlock TextWrapping="Wrap" Foreground="{DynamicResource MutedTextBrush}"
+                       Text="Your providers, favorites and watch history can be brought across. The original files are opened read-only and are never modified." />
+
+            <ItemsControl ItemsSource="{Binding LegacyDatabases}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="mig:LegacyDatabaseInfo">
+                  <Border Background="{DynamicResource SurfaceSunkenBrush}" CornerRadius="4"
+                          Padding="12" Margin="0,4">
+                    <Grid ColumnDefinitions="*,Auto">
+                      <StackPanel Grid.Column="0" Spacing="3">
+                        <TextBlock Text="{Binding Path}" FontFamily="Consolas,monospace"
+                                   FontSize="11" TextTrimming="CharacterEllipsis"
+                                   Foreground="{DynamicResource MutedTextBrush}" />
+                        <TextBlock Foreground="{DynamicResource TextBrush}" FontSize="13">
+                          <Run Text="{Binding ProfileCount}" /><Run Text=" provider(s), " />
+                          <Run Text="{Binding FavoriteCount}" /><Run Text=" favorite(s), " />
+                          <Run Text="{Binding ResumeCount}" /><Run Text=" resume entr(ies)" />
+                        </TextBlock>
+                        <TextBlock Text="{Binding ModifiedAt, StringFormat='Last modified {0:yyyy-MM-dd HH:mm}'}"
+                                   FontSize="11" Foreground="{DynamicResource MutedTextBrush}" />
+                        <TextBlock Text="{Binding Error}" Foreground="{DynamicResource WarningBrush}"
+                                   FontSize="11" TextWrapping="Wrap"
+                                   IsVisible="{Binding Error, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                      </StackPanel>
+                      <Button Grid.Column="1" Content="Import" VerticalAlignment="Center"
+                              IsEnabled="{Binding IsUsable}"
+                              Command="{Binding $parent[Window].((vm:ShellViewModel)DataContext).ImportCommand}"
+                              CommandParameter="{Binding}" />
+                    </Grid>
+                  </Border>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+        </Border>
+
+        <!-- Providers -->
+        <StackPanel Spacing="8">
+          <TextBlock Text="Providers" FontWeight="SemiBold" FontSize="15"
+                     Foreground="{DynamicResource TextBrush}" />
+
+          <TextBlock IsVisible="{Binding !HasProfiles}"
+                     Foreground="{DynamicResource MutedTextBrush}"
+                     Text="No providers yet. Import from the previous version, or add one once the Providers screen lands in Phase 4." />
+
+          <ItemsControl ItemsSource="{Binding Profiles}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:ProfileRowViewModel">
+                <Border Background="{DynamicResource SurfaceRaisedBrush}" CornerRadius="6"
+                        Padding="14" Margin="0,4">
+                  <Grid ColumnDefinitions="*,Auto,Auto,Auto">
+                    <StackPanel Grid.Column="0" Spacing="3">
+                      <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="14"
+                                 Foreground="{DynamicResource TextBrush}" />
+                      <TextBlock FontSize="11" FontFamily="Consolas,monospace"
+                                 Foreground="{DynamicResource MutedTextBrush}">
+                        <Run Text="{Binding Username}" /><Run Text=" @ " /><Run Text="{Binding ServerUrl}" />
+                      </TextBlock>
+                      <TextBlock Text="Password could not be decrypted - please re-enter it"
+                                 IsVisible="{Binding NeedsPassword}" FontSize="11"
+                                 Foreground="{DynamicResource WarningBrush}" />
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="1" Margin="16,0" VerticalAlignment="Center">
+                      <TextBlock Text="{Binding FavoriteCount}" FontSize="16"
+                                 HorizontalAlignment="Center"
+                                 Foreground="{DynamicResource AccentBrush}" />
+                      <TextBlock Text="favorites" FontSize="10"
+                                 Foreground="{DynamicResource MutedTextBrush}" />
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="2" Margin="16,0" VerticalAlignment="Center">
+                      <TextBlock Text="{Binding Status}" FontSize="12"
+                                 HorizontalAlignment="Center"
+                                 Foreground="{DynamicResource TextBrush}" />
+                      <TextBlock Text="{Binding Expiry}" FontSize="10"
+                                 Foreground="{DynamicResource MutedTextBrush}" />
+                    </StackPanel>
+
+                    <TextBlock Grid.Column="3" Text="{Binding Connections}" Margin="16,0"
+                               VerticalAlignment="Center" FontSize="11"
+                               Foreground="{DynamicResource MutedTextBrush}" />
+                  </Grid>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+
+        <!-- Diagnostics -->
+        <StackPanel Spacing="8">
+          <TextBlock Text="Diagnostics" FontWeight="SemiBold" FontSize="15"
+                     Foreground="{DynamicResource TextBrush}" />
+
+          <Border Background="{DynamicResource SurfaceRaisedBrush}" CornerRadius="6" Padding="14">
+            <StackPanel Spacing="10">
+              <Grid ColumnDefinitions="140,*">
+                <TextBlock Grid.Column="0" Text="Database"
+                           Foreground="{DynamicResource MutedTextBrush}" FontSize="12" />
+                <TextBlock Grid.Column="1" Text="{Binding DatabasePath}" FontSize="11"
+                           FontFamily="Consolas,monospace" TextWrapping="Wrap"
+                           Foreground="{DynamicResource TextBrush}" />
+              </Grid>
+              <Grid ColumnDefinitions="140,*">
+                <TextBlock Grid.Column="0" Text="Schema version"
+                           Foreground="{DynamicResource MutedTextBrush}" FontSize="12" />
+                <TextBlock Grid.Column="1" Text="{Binding SchemaVersion}" FontSize="12"
+                           Foreground="{DynamicResource TextBrush}" />
+              </Grid>
+              <Grid ColumnDefinitions="140,*,Auto">
+                <TextBlock Grid.Column="0" Text="Video engine"
+                           Foreground="{DynamicResource MutedTextBrush}" FontSize="12" />
+                <TextBlock Grid.Column="1" Text="{Binding PlaybackEngineStatus}" FontSize="12"
+                           TextWrapping="Wrap" Foreground="{DynamicResource TextBrush}" />
+                <Button Grid.Column="2" Content="Check"
+                        Command="{Binding CheckPlaybackEngineCommand}" />
+              </Grid>
+              <TextBlock Text="{Binding ImportStatus}" FontSize="12" TextWrapping="Wrap"
+                         Foreground="{DynamicResource MutedTextBrush}" />
+            </StackPanel>
+          </Border>
+        </StackPanel>
+      </StackPanel>
+    </ScrollViewer>
+
+    <Border Grid.Row="2" Background="{DynamicResource SurfaceSunkenBrush}" Padding="20,8">
+      <Grid ColumnDefinitions="*,Auto">
+        <TextBlock Grid.Column="0" VerticalAlignment="Center" FontSize="11"
+                   Foreground="{DynamicResource MutedTextBrush}"
+                   Text="Phase 1 of 8 - persistence. Browsing, the guide and the player follow." />
+        <ProgressBar Grid.Column="1" IsIndeterminate="True" Width="120" Height="3"
+                     IsVisible="{Binding IsBusy}" />
+      </Grid>
+    </Border>
+  </Grid>
+</Window>

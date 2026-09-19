@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- Exe, not WinExe. WinExe detaches from the console on Windows, which is
+         how a startup crash ends up printing nothing anywhere and the app just
+         appears to do nothing. A console costs nothing and the crash handler
+         writes a log file regardless. -->
+    <OutputType>Exe</OutputType>
+    <RootNamespace>XtreamPlayer.App</RootNamespace>
+    <AssemblyName>XtreamPlayer</AssemblyName>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../XtreamPlayer.Core/XtreamPlayer.Core.csproj" />
+    <ProjectReference Include="../XtreamPlayer.Infrastructure/XtreamPlayer.Infrastructure.csproj" />
+    <ProjectReference Include="../XtreamPlayer.Playback/XtreamPlayer.Playback.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" />
+    <PackageReference Include="Avalonia.Desktop" />
+    <PackageReference Include="Avalonia.Themes.Fluent" />
+    <PackageReference Include="Avalonia.Fonts.Inter" />
+    <PackageReference Include="Avalonia.Diagnostics" Condition="'$(Configuration)' == 'Debug'" />
+    <PackageReference Include="CommunityToolkit.Mvvm" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" />
+    <PackageReference Include="Serilog.Extensions.Hosting" />
+    <PackageReference Include="Serilog.Sinks.Console" />
+    <PackageReference Include="Serilog.Sinks.File" />
+  </ItemGroup>
+
+</Project>

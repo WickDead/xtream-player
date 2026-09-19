@@ -29,6 +29,11 @@ public sealed class SqliteConnectionFactory : IDbConnectionFactory
             Directory.CreateDirectory(directory);
         }
 
+        // Before anything opens the file: refuse to migrate a database this app
+        // did not create. The data directory is not guaranteed to be empty, and
+        // migrating over colliding tables fails at best and corrupts at worst.
+        Quarantined = ForeignDatabaseGuard.QuarantineIfForeign(DatabaseFile);
+
         _connectionString = new SqliteConnectionStringBuilder
         {
             DataSource = DatabaseFile,
@@ -43,6 +48,12 @@ public sealed class SqliteConnectionFactory : IDbConnectionFactory
     }
 
     public string DatabaseFile { get; }
+
+    /// <summary>
+    /// Set when an incompatible pre-existing database was moved aside on
+    /// startup. The shell surfaces this so the move is never silent.
+    /// </summary>
+    public QuarantineResult? Quarantined { get; private set; }
 
     public SqliteConnection Open()
     {
