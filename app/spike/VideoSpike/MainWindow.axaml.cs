@@ -50,7 +50,7 @@ public partial class MainWindow : Window
         _playback.TracksChanged += OnTracksChanged;
         _playback.Error += OnPlaybackError;
 
-        Video.MediaPlayer = _playback.MediaPlayer;
+        // MediaPlayer is assigned in Opened, NOT here. See OnOpened.
 
         VolumeSlider.PropertyChanged += (_, e) =>
         {
@@ -69,7 +69,42 @@ public partial class MainWindow : Window
         _statusTimer.Tick += (_, _) => UpdateStatus();
         _statusTimer.Start();
 
+        Opened += OnOpened;
         Closing += OnClosing;
+    }
+
+    /// <summary>
+    /// Hands the MediaPlayer to the VideoView once its native child window
+    /// exists.
+    /// </summary>
+    /// <remarks>
+    /// Timing is everything here, and getting it wrong is silent: libvlc simply
+    /// opens its own separate window instead of drawing into ours.
+    ///
+    /// LibVLCSharp.Avalonia 3.10.1's VideoView only assigns
+    /// MediaPlayer.Hwnd inside its private Attach(), which requires
+    /// _platformHandle to be non-null. _platformHandle is created in
+    /// CreateNativeControlCore — which runs on attach to the visual tree and
+    /// does NOT call Attach() afterwards. Attach() is otherwise reached only
+    /// from the Initialized event and the MediaPlayer setter, both of which
+    /// fire BEFORE the native handle exists.
+    ///
+    /// So assigning VideoView.MediaPlayer in the constructor can never work.
+    /// Assigning it here, after Opened, runs the setter once the handle is
+    /// live, and the setter calls Attach().
+    /// </remarks>
+    private void OnOpened(object? sender, EventArgs e)
+    {
+        Video.MediaPlayer = _playback.MediaPlayer;
+
+        var hwnd = _playback.MediaPlayer.Hwnd;
+        Console.WriteLine($"Attached MediaPlayer to VideoView. hwnd=0x{hwnd.ToInt64():X}");
+
+        if (hwnd == IntPtr.Zero)
+        {
+            Console.Error.WriteLine(
+                "WARNING: hwnd is still 0 - video will open in a separate window.");
+        }
     }
 
     // ---- Source ---------------------------------------------------------
@@ -272,7 +307,9 @@ public partial class MainWindow : Window
 
     private void UpdateStatus() =>
         StatusText.Text =
-            $"{_playback.State,-9} | seekable={_playback.IsSeekable,-5} | "
+            $"hwnd=0x{_playback.MediaPlayer.Hwnd.ToInt64():X} "
+          + $"view={(Video.MediaPlayer is null ? "null" : "set")} | "
+          + $"{_playback.State,-9} | seekable={_playback.IsSeekable,-5} | "
           + $"audio={_playback.AudioTracks.Count} (sel {_playback.SelectedAudioTrackId}) | "
           + $"subs={_playback.SubtitleTracks.Count} (sel {_playback.SelectedSubtitleTrackId}) | "
           + $"vol={_playback.Volume} | libvlc={VlcLocator.ResolvedDirectory}";

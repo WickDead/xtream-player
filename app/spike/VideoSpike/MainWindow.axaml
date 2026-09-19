@@ -7,16 +7,22 @@
         Background="#101014">
 
   <!--
-    This is the layout-dodge from the plan, built to be judged.
+    Two approaches to chrome, side by side, so they can be judged against a real
+    stream rather than argued about.
 
     VideoView is a NativeControlHost: the video lives in its own native child
-    window that the OS composites on top of anything Avalonia draws in that
-    rect. Controls therefore CANNOT float over it. Instead the chrome occupies
-    its own Grid rows above and below the video, and auto-hide collapses those
-    rows to zero so the video expands to fill.
+    window that the OS composites on top of anything Avalonia DRAWS in that
+    rect. So ordinary sibling controls cannot appear over it.
 
-    The "Overlay probe" button deliberately tries to draw a panel over the
-    video so the airspace failure can be observed rather than taken on faith.
+    1. "Auto-hide chrome" - the layout dodge. Chrome occupies its own Grid rows
+       above and below the video; hiding collapses those rows so video fills.
+       Completely reliable, costs the floating look.
+
+    2. "Overlay probe" - VideoView.Content. The library hosts this in a separate
+       transparent top-most Window that it keeps aligned to the video, which
+       does composite over it. This is what makes TiViMate-style floating OSD
+       possible. Being a real OS window, watch for lag while dragging or
+       resizing, and for it hiding when the app loses focus.
   -->
   <Grid RowDefinitions="Auto,Auto,*,Auto,Auto">
 
@@ -46,22 +52,26 @@
                  FontSize="14" Foreground="#E6E8F0" />
     </Border>
 
-    <!-- Row 2: the video surface. Black background matters: the native child
-         window is not created until playback starts, and a non-black gap here
-         reads as a bug. -->
-    <Grid Grid.Row="2" Background="Black">
-      <vlc:VideoView x:Name="Video" />
+    <!-- Row 2: the video surface.
 
-      <!-- Airspace probe. Visible=false by default; toggling it demonstrates
-           that this panel is hidden BEHIND the video despite being later in
-           z-order. -->
-      <Border x:Name="OverlayProbe" IsVisible="False"
-              Background="#CC202030" CornerRadius="6"
-              HorizontalAlignment="Center" VerticalAlignment="Bottom"
-              Margin="0,0,0,40" Padding="18,12">
-        <TextBlock Foreground="White" TextAlignment="Center"
-                   Text="If you can read this while video is playing,&#10;overlays work and the plan can be revisited." />
-      </Border>
+         NOTE: VideoView.MediaPlayer is assigned in code-behind on Window.Opened,
+         never here and never in the constructor. VideoView only wires
+         MediaPlayer.Hwnd once its native handle exists, and binding it earlier
+         silently results in libvlc opening its own separate window. -->
+    <Grid Grid.Row="2" Background="Black">
+      <vlc:VideoView x:Name="Video">
+        <!-- VideoView.Content is NOT ordinary child content. The library puts it
+             in a separate transparent, borderless, top-most Window that it keeps
+             positioned over the video (see InitializeNativeOverlay /
+             UpdateOverlayPosition). That is how floating OSD is possible at all
+             despite the native-control airspace limit - and it means we do not
+             have to write and maintain that window-syncing glue ourselves. -->
+        <Border x:Name="OverlayProbe" IsVisible="False"
+                Background="#CC202030" CornerRadius="6" Padding="18,12">
+          <TextBlock Foreground="White" TextAlignment="Center"
+                     Text="FLOATING OVERLAY WORKS.&#10;TiViMate-style OSD over video is possible." />
+        </Border>
+      </vlc:VideoView>
     </Grid>
 
     <!-- Row 3: transport BELOW the video. Collapses on auto-hide. -->
