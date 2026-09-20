@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>XtreamPlayer.Core</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Name normalization in the EPG matcher is internal but has real
+         behaviour worth asserting directly. -->
+    <InternalsVisibleTo Include="XtreamPlayer.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The navigation engine lives in Core, not the app project, so the back
+         stack is unit-testable without spinning a UI. It is the headline
+         feature and deserves a regression suite. -->
+    <PackageReference Include="CommunityToolkit.Mvvm" />
+  </ItemGroup>
+
+</Project>

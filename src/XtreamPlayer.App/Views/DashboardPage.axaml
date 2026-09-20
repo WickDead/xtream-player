@@ -1,0 +1,112 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:XtreamPlayer.App.ViewModels"
+             xmlns:media="clr-namespace:XtreamPlayer.App.Media"
+             x:Class="XtreamPlayer.App.Views.DashboardPage"
+             x:DataType="vm:DashboardPageViewModel">
+
+  <ScrollViewer>
+    <StackPanel Margin="28,24" Spacing="26">
+
+      <TextBox Watermark="Search channels, movies and series"
+               MaxWidth="620" HorizontalAlignment="Left"
+               Text="{Binding SearchText, Mode=TwoWay}" />
+
+      <StackPanel Spacing="12" IsVisible="{Binding HasResults}">
+        <TextBlock Classes="h2" Text="Results" />
+        <ItemsControl ItemsSource="{Binding Results}">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+              <WrapPanel />
+            </ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:SearchHit">
+              <Button Classes="ghost" Padding="0" Margin="0,0,12,12" Width="150"
+                      Command="{Binding $parent[UserControl].((vm:DashboardPageViewModel)DataContext).OpenCommand}"
+                      CommandParameter="{Binding}">
+                <StackPanel Spacing="6">
+                  <!-- Uniform, not UniformToFill: this row mixes 2:3 posters
+                       with wide channel logos, and filling crops a logo to its
+                       middle third. A poster already matches the tile ratio, so
+                       it loses nothing. -->
+                  <media:AsyncImage Height="210" Source="{Binding PosterUrl}" DecodeWidth="180"
+                                    Stretch="Uniform" CornerRadius="6"
+                                    Placeholder="{DynamicResource PosterPlaceholder}" />
+                  <TextBlock Text="{Binding Title}" FontSize="{DynamicResource TextSm}"
+                             MaxLines="2" TextWrapping="Wrap" />
+                  <TextBlock Classes="muted" Text="{Binding KindLabel}" />
+                </StackPanel>
+              </Button>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </StackPanel>
+
+      <!-- Continue Watching. The previous app had the whole resume backend and
+           never rendered this, because nothing ever wrote a checkpoint. -->
+      <StackPanel Spacing="12" IsVisible="{Binding HasContinueWatching}">
+        <TextBlock Classes="h2" Text="Continue watching" />
+        <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+          <ItemsControl ItemsSource="{Binding ContinueWatching}">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <StackPanel Orientation="Horizontal" Spacing="12" />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:ContinueWatchingCard">
+                <Button Classes="ghost" Padding="0" Width="230"
+                        Command="{Binding $parent[UserControl].((vm:DashboardPageViewModel)DataContext).ResumeCommand}"
+                        CommandParameter="{Binding}">
+                  <StackPanel Spacing="6">
+                    <media:AsyncImage Height="130" Source="{Binding PosterUrl}" DecodeWidth="260"
+                                      Stretch="UniformToFill" CornerRadius="6"
+                                      Placeholder="{DynamicResource PosterPlaceholder}" />
+                    <ProgressBar Minimum="0" Maximum="1" Value="{Binding Progress}" />
+                    <TextBlock Text="{Binding Title}" FontSize="{DynamicResource TextSm}" />
+                    <TextBlock Classes="muted" Text="{Binding RemainingLabel}" />
+                  </StackPanel>
+                </Button>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </ScrollViewer>
+      </StackPanel>
+
+      <StackPanel Spacing="12" IsVisible="{Binding HasFavorites}">
+        <TextBlock Classes="h2" Text="Favorites" />
+        <ItemsControl ItemsSource="{Binding Favorites}">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+              <WrapPanel />
+            </ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:SearchHit">
+              <Button Classes="ghost" Padding="0" Margin="0,0,12,12" Width="150"
+                      Opacity="{Binding Context, Converter={x:Static vm:AvailabilityOpacityConverter.Instance}}"
+                      Command="{Binding $parent[UserControl].((vm:DashboardPageViewModel)DataContext).OpenCommand}"
+                      CommandParameter="{Binding}">
+                <StackPanel Spacing="6">
+                  <!-- Uniform, not UniformToFill: this row mixes 2:3 posters
+                       with wide channel logos, and filling crops a logo to its
+                       middle third. A poster already matches the tile ratio, so
+                       it loses nothing. -->
+                  <media:AsyncImage Height="210" Source="{Binding PosterUrl}" DecodeWidth="180"
+                                    Stretch="Uniform" CornerRadius="6"
+                                    Placeholder="{DynamicResource PosterPlaceholder}" />
+                  <TextBlock Text="{Binding Title}" FontSize="{DynamicResource TextSm}"
+                             MaxLines="2" TextWrapping="Wrap" />
+                  <!-- A favorite the catalog no longer has says so, rather than
+                       silently vanishing the way it used to. -->
+                  <TextBlock Classes="muted" Text="{Binding Context}" />
+                </StackPanel>
+              </Button>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </StackPanel>
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

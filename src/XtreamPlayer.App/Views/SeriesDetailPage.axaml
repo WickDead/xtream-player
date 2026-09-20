@@ -1,0 +1,83 @@
+﻿<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:XtreamPlayer.App.ViewModels"
+             xmlns:models="clr-namespace:XtreamPlayer.Core.Models;assembly=XtreamPlayer.Core"
+             xmlns:media="clr-namespace:XtreamPlayer.App.Media"
+             x:Class="XtreamPlayer.App.Views.SeriesDetailPage"
+             x:DataType="vm:SeriesDetailPageViewModel">
+
+  <Grid RowDefinitions="Auto,*">
+
+    <Grid Grid.Row="0" ColumnDefinitions="Auto,*" Margin="28,24,28,16">
+      <media:AsyncImage Grid.Column="0" Width="170" Height="255" VerticalAlignment="Top"
+                        Source="{Binding PosterUrl}" DecodeWidth="220"
+                        Stretch="UniformToFill" CornerRadius="8"
+                        Placeholder="{DynamicResource PosterPlaceholder}" />
+
+      <StackPanel Grid.Column="1" Margin="22,0,0,0" Spacing="12" MaxWidth="820">
+        <TextBlock Classes="h1" Text="{Binding Title}" TextWrapping="Wrap" TextTrimming="None" />
+
+        <TextBlock Classes="muted" Text="{Binding MetaLine}" TextWrapping="Wrap"
+                   IsVisible="{Binding MetaLine, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+
+        <StackPanel Orientation="Horizontal" Spacing="10">
+          <Button Command="{Binding ToggleFavoriteCommand}"
+                  Foreground="{Binding IsFavorite, Converter={x:Static vm:FavoriteBrushConverter.Instance}}"
+                  Content="{Binding IsFavorite, Converter={x:Static vm:StarGlyphConverter.Instance}}" />
+          <Button Content="Download season" Command="{Binding DownloadSeasonCommand}" />
+          <ComboBox MinWidth="170" ItemsSource="{Binding Seasons}"
+                    SelectedItem="{Binding SelectedSeason}">
+            <ComboBox.ItemTemplate>
+              <DataTemplate x:DataType="models:SeriesSeason">
+                <TextBlock Text="{Binding Name}" />
+              </DataTemplate>
+            </ComboBox.ItemTemplate>
+          </ComboBox>
+        </StackPanel>
+
+        <TextBlock Classes="muted" Text="{Binding DownloadStatus}"
+                   IsVisible="{Binding DownloadStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+
+        <TextBlock Text="{Binding Plot}" TextWrapping="Wrap" TextTrimming="None" MaxLines="4"
+                   Foreground="{DynamicResource TextSecondary}" LineHeight="20" />
+
+        <TextBlock Foreground="{DynamicResource Warning}" Text="{Binding Error}"
+                   IsVisible="{Binding Error, Converter={x:Static ObjectConverters.IsNotNull}}" />
+      </StackPanel>
+    </Grid>
+
+    <ListBox Grid.Row="1" Margin="20,0,20,16" ItemsSource="{Binding Episodes}">
+      <ListBox.ItemTemplate>
+        <DataTemplate x:DataType="vm:EpisodeViewModel">
+          <Grid ColumnDefinitions="Auto,Auto,*,Auto" Height="76" Margin="4,2">
+
+            <TextBlock Grid.Column="0" Classes="mono muted" Text="{Binding NumberLabel}"
+                       VerticalAlignment="Center" Width="34" TextAlignment="Center" />
+
+            <media:AsyncImage Grid.Column="1" Width="112" Height="64" Margin="6,0"
+                              Source="{Binding StillUrl}" DecodeWidth="160"
+                              Stretch="UniformToFill" CornerRadius="4"
+                              Placeholder="{DynamicResource PosterPlaceholder}" />
+
+            <StackPanel Grid.Column="2" VerticalAlignment="Center" Margin="10,0" Spacing="3">
+              <TextBlock Text="{Binding Title}" FontSize="{DynamicResource TextMd}" />
+              <TextBlock Classes="muted" Text="{Binding Plot}" MaxLines="2" TextWrapping="Wrap" />
+              <ProgressBar Minimum="0" Maximum="1" Value="{Binding Progress}" Width="180"
+                           HorizontalAlignment="Left" IsVisible="{Binding HasProgress}" />
+            </StackPanel>
+
+            <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="6"
+                        VerticalAlignment="Center">
+              <Button Content="Download"
+                      Command="{Binding $parent[UserControl].((vm:SeriesDetailPageViewModel)DataContext).DownloadEpisodeCommand}"
+                      CommandParameter="{Binding}" />
+              <Button Classes="accent" Content="Play"
+                      Command="{Binding $parent[UserControl].((vm:SeriesDetailPageViewModel)DataContext).PlayEpisodeCommand}"
+                      CommandParameter="{Binding}" />
+            </StackPanel>
+          </Grid>
+        </DataTemplate>
+      </ListBox.ItemTemplate>
+    </ListBox>
+  </Grid>
+</UserControl>

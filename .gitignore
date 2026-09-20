@@ -17,12 +17,14 @@ dist-ssr
 !.vscode/extensions.json
 .idea
 .DS_Store
-*.suo
 *.ntvs*
 *.njsproj
-*.sln
 *.sw?
 
 # Local tooling and build outputs
 .playwright-mcp/
-src-tauri/target/
+
+# .NET / Avalonia app
+**/bin/
+**/obj/
+*.user

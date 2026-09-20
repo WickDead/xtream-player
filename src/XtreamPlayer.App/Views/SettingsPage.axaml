@@ -1,0 +1,58 @@
+﻿<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:XtreamPlayer.App.ViewModels"
+             x:Class="XtreamPlayer.App.Views.SettingsPage"
+             x:DataType="vm:SettingsPageViewModel">
+
+  <ScrollViewer>
+    <StackPanel Margin="28,24" Spacing="20" MaxWidth="620" HorizontalAlignment="Left">
+      <TextBlock Classes="h1" Text="Settings" />
+
+      <StackPanel Spacing="10">
+        <TextBlock Classes="h3" Text="Playback" />
+        <StackPanel Spacing="4">
+          <TextBlock Classes="muted" Text="Preferred audio languages, most preferred first" />
+          <TextBox Text="{Binding PreferredAudioLanguages, Mode=TwoWay}" />
+        </StackPanel>
+        <CheckBox Content="Start with subtitles off"
+                  IsChecked="{Binding SubtitlesOffByDefault, Mode=TwoWay}" />
+        <CheckBox Content="Hardware decoding (turn off to diagnose green or garbled video)"
+                  IsChecked="{Binding HardwareDecoding, Mode=TwoWay}" />
+      </StackPanel>
+
+      <StackPanel Spacing="10">
+        <TextBlock Classes="h3" Text="Catalogs" />
+        <StackPanel Spacing="4">
+          <TextBlock Classes="muted" Text="Refresh catalogs older than this many hours" />
+          <NumericUpDown Minimum="1" Maximum="168" Increment="1" Width="130"
+                         HorizontalAlignment="Left"
+                         Value="{Binding CatalogTtlHours, Mode=TwoWay}" />
+        </StackPanel>
+
+        <!-- A visible escape hatch. Hidden categories are easy to set by
+             accident, and without this a user has to find and unhide each one. -->
+        <Button Content="Reset hidden categories for all providers"
+                HorizontalAlignment="Left"
+                Command="{Binding ResetHiddenCategoriesCommand}" />
+      </StackPanel>
+
+      <StackPanel Spacing="6">
+        <TextBlock Classes="h3" Text="Storage" />
+        <TextBlock Classes="mono muted" Text="{Binding DataDirectory}"
+                   TextWrapping="Wrap" TextTrimming="None" />
+        <TextBlock Classes="mono muted" Text="{Binding LogDirectory}"
+                   TextWrapping="Wrap" TextTrimming="None" />
+      </StackPanel>
+
+      <StackPanel Orientation="Horizontal" Spacing="10">
+        <TextBlock Classes="h3" Text="Downloads" />
+        <TextBlock Classes="muted"
+                   Text="Where downloaded movies, episodes and recordings are written." />
+        <TextBox Text="{Binding DownloadsFolder, Mode=TwoWay}" Watermark="Downloads folder" />
+
+        <Button Classes="accent" Content="Save" Command="{Binding SaveCommand}" />
+        <TextBlock Classes="muted" Text="{Binding StatusMessage}" VerticalAlignment="Center" />
+      </StackPanel>
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

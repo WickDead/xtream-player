@@ -1,0 +1,141 @@
+﻿<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="clr-namespace:XtreamPlayer.App.ViewModels"
+        xmlns:nav="clr-namespace:XtreamPlayer.Core.Navigation;assembly=XtreamPlayer.Core"
+        xmlns:models="clr-namespace:XtreamPlayer.Core.Models;assembly=XtreamPlayer.Core"
+        xmlns:mig="clr-namespace:XtreamPlayer.Infrastructure.Migration;assembly=XtreamPlayer.Infrastructure"
+        x:Class="XtreamPlayer.App.Views.MainWindow"
+        Icon="/Assets/icon-256.png"
+        x:DataType="vm:ShellViewModel"
+        Title="Xtream Player"
+        Width="1440" Height="900"
+        MinWidth="1040" MinHeight="640"
+        WindowStartupLocation="CenterScreen"
+        Background="{DynamicResource AppBackground}">
+
+  <Grid ColumnDefinitions="Auto,*">
+
+    <!-- Sidebar. Icon + label, narrow, always visible: with six destinations a
+         collapsible rail would cost a click to save 90px. -->
+    <!-- Every piece of chrome collapses for fullscreen, so the page host is
+         the only thing left holding space and the video fills the screen. -->
+    <Border Grid.Column="0" Width="188" Background="{DynamicResource SurfaceSunken}"
+            IsVisible="{Binding !IsFullscreen}">
+      <Grid RowDefinitions="Auto,*,Auto">
+
+        <StackPanel Grid.Row="0" Margin="16,18,16,14" Spacing="2">
+          <TextBlock Text="Xtream Player" FontSize="{DynamicResource TextLg}" FontWeight="SemiBold" />
+          <TextBlock Classes="muted" Text="{Binding ActiveProfile.Name, FallbackValue='No provider'}" />
+        </StackPanel>
+
+        <ItemsControl Grid.Row="1" ItemsSource="{Binding Destinations}" Margin="8,0">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:NavDestination">
+              <Button Classes="ghost"
+                      HorizontalAlignment="Stretch"
+                      HorizontalContentAlignment="Left"
+                      Padding="10,9" Margin="0,1"
+                      Command="{Binding $parent[Window].((vm:ShellViewModel)DataContext).GoToCommand}"
+                      CommandParameter="{Binding Key}">
+                <TextBlock Text="{Binding Label}" FontSize="{DynamicResource TextMd}" />
+              </Button>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
+        <StackPanel Grid.Row="2" Margin="8,0,8,12" Spacing="2">
+          <Button Classes="ghost" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                  Padding="10,9" Command="{Binding OpenSettingsCommand}" Content="Settings" />
+          <Button Classes="ghost" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                  Padding="10,9" Command="{Binding GoToCommand}"
+                  CommandParameter="{x:Static nav:PageKey.Providers}" Content="Providers" />
+        </StackPanel>
+      </Grid>
+    </Border>
+
+    <Grid Grid.Column="1" RowDefinitions="Auto,Auto,*,Auto">
+
+      <!-- Top bar: history controls, breadcrumbs, search, provider, sync. -->
+      <Border Grid.Row="0" Background="{DynamicResource Surface}" Padding="14,10"
+              IsVisible="{Binding !IsFullscreen}">
+        <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto">
+
+          <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="2" Margin="0,0,10,0">
+            <Button Classes="icon" Content="&#x2190;" ToolTip.Tip="Back (Alt+Left)"
+                    IsEnabled="{Binding CanGoBack}" Command="{Binding GoBackCommand}" />
+            <Button Classes="icon" Content="&#x2192;" ToolTip.Tip="Forward (Alt+Right)"
+                    IsEnabled="{Binding CanGoForward}" Command="{Binding GoForwardCommand}" />
+          </StackPanel>
+
+          <!-- Breadcrumbs make the back stack visible rather than something the
+               user has to remember. -->
+          <ItemsControl Grid.Column="1" ItemsSource="{Binding Breadcrumbs}"
+                        VerticalAlignment="Center">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <StackPanel Orientation="Horizontal" Spacing="2" />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="nav:NavCrumb">
+                <StackPanel Orientation="Horizontal" Spacing="2">
+                  <Button Classes="ghost" Content="{Binding Label}"
+                          Command="{Binding $parent[Window].((vm:ShellViewModel)DataContext).PopToCommand}"
+                          CommandParameter="{Binding}" />
+                  <TextBlock Classes="muted" Text="/" VerticalAlignment="Center" />
+                </StackPanel>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+
+          <TextBox Grid.Column="2" Width="260" Margin="10,0"
+                   Watermark="Search everything"
+                   Text="{Binding GlobalSearch, Mode=TwoWay}">
+            <TextBox.KeyBindings>
+              <KeyBinding Gesture="Enter" Command="{Binding SearchCommand}" />
+            </TextBox.KeyBindings>
+          </TextBox>
+
+          <ComboBox Grid.Column="3" MinWidth="130" Margin="0,0,8,0"
+                    ItemsSource="{Binding Profiles}"
+                    SelectedItem="{Binding ActiveProfile}"
+                    ToolTip.Tip="Active provider">
+            <ComboBox.ItemTemplate>
+              <DataTemplate x:DataType="models:Profile">
+                <TextBlock Text="{Binding Name}" />
+              </DataTemplate>
+            </ComboBox.ItemTemplate>
+          </ComboBox>
+
+          <Button Grid.Column="4" Classes="icon" Content="&#x21BB;"
+                  ToolTip.Tip="Refresh catalogs"
+                  IsEnabled="{Binding !IsSyncing}"
+                  Command="{Binding ForceSyncCommand}" />
+        </Grid>
+      </Border>
+
+      <!-- Notices, shown only when they apply. -->
+      <StackPanel Grid.Row="1" IsVisible="{Binding !IsFullscreen}">
+        <Border Background="{DynamicResource SurfaceRaised}" Padding="14,9"
+                IsVisible="{Binding QuarantineNotice, Converter={x:Static ObjectConverters.IsNotNull}}">
+          <TextBlock Text="{Binding QuarantineNotice}" TextWrapping="Wrap"
+                     Foreground="{DynamicResource Warning}" FontSize="{DynamicResource TextSm}" />
+        </Border>
+      </StackPanel>
+
+      <!-- Page host. -->
+      <ContentControl Grid.Row="2" Content="{Binding CurrentPage}" />
+
+      <!-- Status bar. -->
+      <Border Grid.Row="3" Background="{DynamicResource SurfaceSunken}" Padding="14,6"
+              IsVisible="{Binding !IsFullscreen}">
+        <Grid ColumnDefinitions="*,Auto">
+          <TextBlock Grid.Column="0" Classes="muted" Text="{Binding StatusMessage}"
+                     VerticalAlignment="Center" />
+          <ProgressBar Grid.Column="1" Width="130" IsIndeterminate="True"
+                       IsVisible="{Binding IsSyncing}" />
+        </Grid>
+      </Border>
+    </Grid>
+  </Grid>
+</Window>

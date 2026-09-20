@@ -1,0 +1,104 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>XtreamPlayer.App</RootNamespace>
+    <AssemblyName>XtreamPlayer</AssemblyName>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+
+    <!-- Embedded in the executable, which is what Explorer, the taskbar and the
+         installer's uninstall entry all read. Regenerate with
+         `dotnet run app/packaging/make-icon.cs`. -->
+    <ApplicationIcon>Assets\icon.ico</ApplicationIcon>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+
+    <Version>0.9.0</Version>
+    <Company>XtreamPlayer</Company>
+    <Product>Xtream Player</Product>
+    <Description>An Xtream IPTV player with a real back stack, an XMLTV guide and a built-in video engine.</Description>
+  </PropertyGroup>
+
+  <!--
+    Exe during development so a startup crash prints somewhere: WinExe detaches
+    from the console, which is how a failure before the window opens ends up
+    looking like the app simply never ran. Release ships WinExe because a console
+    flashing up on every launch is not something to inflict on a released build,
+    and the crash handler writes crash.log either way.
+  -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Debug'">
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)' != 'Debug'">
+    <OutputType>WinExe</OutputType>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <!--
+      Self-contained, folder deployment. NOT single-file: libvlc scans a real
+      plugins directory on disk at init, and bundling the natives into a
+      self-extracting exe is a reliable way to make it find nothing and fail with
+      no usable error.
+    -->
+    <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == '' and $([MSBuild]::IsOSPlatform('Windows'))">win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>false</PublishSingleFile>
+    <PublishReadyToRun>true</PublishReadyToRun>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The headless UI tests drive real views, and reach one or two internals
+         that exist only so a test can trigger a path without building the whole
+         view model graph behind it. -->
+    <InternalsVisibleTo Include="XtreamPlayer.UiTests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- PNGs only: the .ico is already embedded in the executable by
+         ApplicationIcon, and shipping it again inside the assembly would add
+         140 KB for nothing. -->
+    <AvaloniaResource Include="Assets\*.png" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../XtreamPlayer.Core/XtreamPlayer.Core.csproj" />
+    <ProjectReference Include="../XtreamPlayer.Infrastructure/XtreamPlayer.Infrastructure.csproj" />
+    <ProjectReference Include="../XtreamPlayer.Playback/XtreamPlayer.Playback.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" />
+    <PackageReference Include="Avalonia.Desktop" />
+    <PackageReference Include="Avalonia.Themes.Fluent" />
+    <PackageReference Include="Avalonia.Fonts.Inter" />
+    <PackageReference Include="Avalonia.Diagnostics" Condition="'$(Configuration)' == 'Debug'" />
+    <PackageReference Include="CommunityToolkit.Mvvm" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" />
+    <PackageReference Include="Serilog.Extensions.Hosting" />
+    <PackageReference Include="Serilog.Sinks.Console" />
+    <PackageReference Include="Serilog.Sinks.File" />
+  </ItemGroup>
+
+  <!--
+    The libvlc package copies win-x64, win-x86 and win-arm64 regardless of the
+    RID being published, which is 182 MB of natives for architectures this build
+    cannot load. The .lib files are import libraries for compiling against
+    libvlc and are dead weight at runtime.
+  -->
+  <Target Name="TrimUnusedLibVlcArchitectures" AfterTargets="Publish"
+          Condition="'$(RuntimeIdentifier)' != '' and Exists('$(PublishDir)libvlc')">
+
+    <ItemGroup>
+      <_VlcArchDir Include="$([System.IO.Directory]::GetDirectories('$(PublishDir)libvlc'))" />
+      <_VlcArchToRemove Include="@(_VlcArchDir)" Condition="'%(Filename)' != '$(RuntimeIdentifier)'" />
+      <_VlcImportLib Include="$(PublishDir)libvlc/**/*.lib" />
+    </ItemGroup>
+
+    <RemoveDir Directories="@(_VlcArchToRemove)" />
+    <Delete Files="@(_VlcImportLib)" />
+
+    <Message Importance="high"
+             Text="Trimmed libvlc natives to $(RuntimeIdentifier) (removed @(_VlcArchToRemove->'%(Filename)', ', '))." />
+  </Target>
+
+</Project>

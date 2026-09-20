@@ -1,0 +1,139 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:XtreamPlayer.App.ViewModels"
+             xmlns:lib="clr-namespace:XtreamPlayer.Core.Library;assembly=XtreamPlayer.Core"
+             xmlns:models="clr-namespace:XtreamPlayer.Core.Models;assembly=XtreamPlayer.Core"
+             xmlns:media="clr-namespace:XtreamPlayer.App.Media"
+             xmlns:beh="clr-namespace:XtreamPlayer.App.Behaviors"
+             x:Class="XtreamPlayer.App.Views.LivePage"
+             x:DataType="vm:LivePageViewModel">
+
+  <!-- Three columns: category rail, channel list, now/next panel. The same
+       shape the previous app used, because it works; what changes is that the
+       selection and scroll position survive leaving the page. -->
+  <Grid ColumnDefinitions="248,*,340">
+
+    <!-- Category rail -->
+    <Border Grid.Column="0" Background="{DynamicResource Surface}">
+      <Grid RowDefinitions="Auto,*,Auto">
+        <StackPanel Grid.Row="0" Margin="12,12,12,8" Spacing="8">
+          <TextBlock Classes="h3" Text="Categories" />
+          <ComboBox HorizontalAlignment="Stretch"
+                    SelectedIndex="{Binding CategorySort, Converter={x:Static vm:EnumIndexConverter.Instance}}">
+            <ComboBoxItem Content="Provider order" />
+            <ComboBoxItem Content="Name" />
+            <ComboBoxItem Content="Size" />
+          </ComboBox>
+        </StackPanel>
+
+        <ListBox Grid.Row="1" Margin="6,0"
+                 ItemsSource="{Binding Categories}"
+                 SelectedItem="{Binding SelectedCategory}">
+          <ListBox.ItemTemplate>
+            <DataTemplate x:DataType="vm:CategoryRowViewModel">
+              <Grid ColumnDefinitions="*,Auto,Auto" Height="32">
+                <TextBlock Grid.Column="0" Text="{Binding Name}" VerticalAlignment="Center"
+                           Margin="8,0" FontSize="{DynamicResource TextSm}"
+                           Opacity="{Binding IsHidden, Converter={x:Static vm:HiddenOpacityConverter.Instance}}" />
+                <TextBlock Grid.Column="1" Classes="muted" Text="{Binding CountLabel}"
+                           VerticalAlignment="Center" Margin="0,0,6,0" />
+                <Button Grid.Column="2" Classes="icon" Padding="4" MinWidth="26"
+                        IsVisible="{Binding CanHide}"
+                        ToolTip.Tip="Hide this category"
+                        Content="{Binding IsHidden, Converter={x:Static vm:HideGlyphConverter.Instance}}"
+                        Command="{Binding $parent[UserControl].((vm:LivePageViewModel)DataContext).ToggleCategoryHiddenCommand}"
+                        CommandParameter="{Binding}" />
+              </Grid>
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+        </ListBox>
+
+        <Button Grid.Row="2" Classes="ghost" Margin="12,8" HorizontalAlignment="Stretch"
+                Command="{Binding ToggleShowHiddenCommand}"
+                Content="{Binding ShowHiddenCategories, Converter={x:Static vm:ShowHiddenLabelConverter.Instance}}" />
+      </Grid>
+    </Border>
+
+    <!-- Channel list -->
+    <Grid Grid.Column="1" RowDefinitions="Auto,*">
+      <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="14,12,14,8">
+        <TextBox Grid.Column="0" Watermark="Filter channels"
+                 Text="{Binding SearchText, Mode=TwoWay}" />
+        <TextBlock Grid.Column="1" Classes="muted" Text="{Binding ResultSummary}"
+                   VerticalAlignment="Center" Margin="10,0,0,0" />
+      </Grid>
+
+      <ListBox Grid.Row="1" Margin="8,0,8,8"
+               ItemsSource="{Binding Items}"
+               SelectedItem="{Binding SelectedItem}"
+               beh:ScrollAnchor.Key="channels"
+               beh:ScrollAnchor.Page="{Binding}">
+        <ListBox.ItemTemplate>
+          <DataTemplate x:DataType="vm:LiveChannelViewModel">
+            <Grid ColumnDefinitions="Auto,40,*,Auto" Height="46" Margin="4,1">
+
+              <!-- Channel logo. Small decode width keeps a 12,000 row list cheap. -->
+              <media:AsyncImage Grid.Column="0" Width="32" Height="32" Margin="6,0"
+                                Source="{Binding IconUrl}" DecodeWidth="64"
+                                Stretch="Uniform" CornerRadius="3"
+                                Placeholder="{DynamicResource PosterPlaceholder}" />
+
+              <TextBlock Grid.Column="1" Classes="mono muted" Text="{Binding NumberLabel}"
+                         VerticalAlignment="Center" />
+
+              <StackPanel Grid.Column="2" VerticalAlignment="Center" Spacing="1">
+                <TextBlock Text="{Binding Name}" FontSize="{DynamicResource TextMd}" />
+                <TextBlock Classes="muted" Text="{Binding NowPlaying}"
+                           IsVisible="{Binding NowPlaying, Converter={x:Static ObjectConverters.IsNotNull}}" />
+              </StackPanel>
+
+              <Button Grid.Column="3" Classes="icon" Padding="6"
+                      ToolTip.Tip="Favorite"
+                      Foreground="{Binding IsFavorite, Converter={x:Static vm:FavoriteBrushConverter.Instance}}"
+                      Content="{Binding IsFavorite, Converter={x:Static vm:StarGlyphConverter.Instance}}"
+                      Command="{Binding $parent[UserControl].((vm:LivePageViewModel)DataContext).ToggleFavoriteCommand}"
+                      CommandParameter="{Binding}" />
+            </Grid>
+          </DataTemplate>
+        </ListBox.ItemTemplate>
+
+        <ListBox.KeyBindings>
+          <KeyBinding Gesture="Enter" Command="{Binding PlayCommand}"
+                      CommandParameter="{Binding SelectedItem}" />
+        </ListBox.KeyBindings>
+      </ListBox>
+    </Grid>
+
+    <!-- Now / next -->
+    <Border Grid.Column="2" Background="{DynamicResource Surface}" Padding="16">
+      <ScrollViewer>
+        <StackPanel Spacing="14" DataContext="{Binding SelectedItem}"
+                    x:DataType="vm:LiveChannelViewModel">
+
+          <media:AsyncImage Height="90" Source="{Binding IconUrl}" DecodeWidth="240"
+                            Stretch="Uniform"
+                            Placeholder="{DynamicResource PosterPlaceholder}" />
+
+          <TextBlock Classes="h2" Text="{Binding Name}" TextWrapping="Wrap" TextTrimming="None" />
+
+          <StackPanel Spacing="4"
+                      IsVisible="{Binding NowPlaying, Converter={x:Static ObjectConverters.IsNotNull}}">
+            <TextBlock Classes="muted" Text="NOW" />
+            <TextBlock Text="{Binding NowPlaying}" TextWrapping="Wrap" TextTrimming="None" />
+            <ProgressBar Minimum="0" Maximum="1" Value="{Binding ProgrammeProgress}" />
+          </StackPanel>
+
+          <StackPanel Spacing="4"
+                      IsVisible="{Binding NextUp, Converter={x:Static ObjectConverters.IsNotNull}}">
+            <TextBlock Classes="muted" Text="NEXT" />
+            <TextBlock Text="{Binding NextUp}" TextWrapping="Wrap" TextTrimming="None" />
+          </StackPanel>
+
+          <Button Classes="accent" HorizontalAlignment="Stretch" Content="Play"
+                  Command="{Binding $parent[UserControl].((vm:LivePageViewModel)DataContext).PlayCommand}"
+                  CommandParameter="{Binding}" />
+        </StackPanel>
+      </ScrollViewer>
+    </Border>
+  </Grid>
+</UserControl>
