@@ -32,6 +32,12 @@ public sealed class PlayerTeardownTests
         for (var i = 0; i < 4; i++)
         {
             Dispatcher.UIThread.RunJobs();
+
+            // Forced, not awaited: teardown bugs in this app have surfaced from
+            // inside the render pass, and a test that never renders never sees
+            // them.
+            AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+            Dispatcher.UIThread.RunJobs();
         }
     }
 

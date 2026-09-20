@@ -59,11 +59,23 @@ public sealed class GuideGridTests
         return (window, canvas);
     }
 
+    /// <summary>
+    /// Lays out, drains the dispatcher, and forces a render.
+    /// </summary>
+    /// <remarks>
+    /// The render tick matters more than the rest. This grid does all its work
+    /// in Render, and a test that never triggers one passes without touching the
+    /// code it claims to cover — which is exactly what happened: a zoom of zero
+    /// threw from inside the render pass and the Debug run reported green
+    /// because the renderer had not got to it.
+    /// </remarks>
     private static void Settle(Window window)
     {
         for (var i = 0; i < 6; i++)
         {
             window.UpdateLayout();
+            Dispatcher.UIThread.RunJobs();
+            AvaloniaHeadlessPlatform.ForceRenderTimerTick();
             Dispatcher.UIThread.RunJobs();
         }
     }

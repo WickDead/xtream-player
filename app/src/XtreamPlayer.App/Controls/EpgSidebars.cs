@@ -61,6 +61,13 @@ public sealed class EpgTimeRuler : Control
             : Brushes.Red;
 
         var pixelsPerMinute = _source.PixelsPerMinute;
+
+        // The ruler divides by this; the canvas guards its own copy, and a
+        // zero here would put the same infinity through AddMinutes.
+        if (!double.IsFinite(pixelsPerMinute) || pixelsPerMinute <= 0.001)
+        {
+            return;
+        }
         var offset = _source.Offset.X;
         var windowStart = _source.WindowStart;
 

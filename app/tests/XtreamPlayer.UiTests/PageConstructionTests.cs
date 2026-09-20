@@ -61,6 +61,25 @@ public sealed class PageConstructionTests(ITestOutputHelper output)
         Assert.True(names.Count >= 10, $"Only found {names.Count} pages: {string.Join(", ", names)}");
     }
 
+    /// <summary>
+    /// Lays out, drains the dispatcher, and forces a render.
+    /// </summary>
+    /// <remarks>
+    /// Without the render tick a page is only constructed, never drawn, and a
+    /// control that throws from inside Render passes. The guide grid did exactly
+    /// that.
+    /// </remarks>
+    private static void Settle(Window window)
+    {
+        for (var i = 0; i < 4; i++)
+        {
+            window.UpdateLayout();
+            Dispatcher.UIThread.RunJobs();
+            Avalonia.Headless.AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+            Dispatcher.UIThread.RunJobs();
+        }
+    }
+
     [AvaloniaTheory]
     [MemberData(nameof(PageTypeNames))]
     public void APageCanBeShownAndRemoved(string typeName)
@@ -76,11 +95,11 @@ public sealed class PageConstructionTests(ITestOutputHelper output)
         window.Content = (Control)Activator.CreateInstance(type)!;
         window.Show();
 
-        Dispatcher.UIThread.RunJobs();
+        Settle(window);
 
         window.Content = null;
 
-        Dispatcher.UIThread.RunJobs();
+        Settle(window);
 
         window.Close();
     }

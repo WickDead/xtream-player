@@ -103,6 +103,29 @@ public sealed class EpgTimelineCanvas : Control, ILogicalScrollable
         set => SetValue(PixelsPerMinuteProperty, value);
     }
 
+    /// <summary>
+    /// The zoom actually used for arithmetic: positive, finite, always.
+    /// </summary>
+    /// <remarks>
+    /// A zoom of zero makes minutes-per-pixel infinite, and
+    /// <c>WindowStart.AddMinutes(infinity)</c> throws — from inside the render
+    /// pass, which is a place nothing catches and the process simply dies. The
+    /// shipped zoom levels never reach zero, but a control should not be able to
+    /// take the application down because a property it does not control held an
+    /// unreasonable value.
+    /// </remarks>
+    private double SafePixelsPerMinute
+    {
+        get
+        {
+            var value = PixelsPerMinute;
+
+            return double.IsFinite(value) && value > 0.001 ? value : DefaultPixelsPerMinute;
+        }
+    }
+
+    private const double DefaultPixelsPerMinute = 6;
+
     public TimeSpan WindowLength
     {
         get => GetValue(WindowLengthProperty);
@@ -179,8 +202,10 @@ public sealed class EpgTimelineCanvas : Control, ILogicalScrollable
 
     private void UpdateExtent()
     {
+        var minutes = WindowLength.TotalMinutes;
+
         _extent = new Size(
-            WindowLength.TotalMinutes * PixelsPerMinute,
+            (double.IsFinite(minutes) && minutes > 0 ? minutes : 0) * SafePixelsPerMinute,
             Math.Max(1, _rows.Count) * RowHeight);
 
         // Scrolled to channel 5,000 and then filtered down to a category of 50:
@@ -205,7 +230,7 @@ public sealed class EpgTimelineCanvas : Control, ILogicalScrollable
     public bool CanVerticallyScroll { get; set; } = true;
     public bool IsLogicalScrollEnabled => true;
 
-    public Size ScrollSize => new(PixelsPerMinute * 30, RowHeight);
+    public Size ScrollSize => new(SafePixelsPerMinute * 30, RowHeight);
 
     public Size PageScrollSize => new(_viewport.Width * 0.9, _viewport.Height);
 
@@ -281,7 +306,7 @@ public sealed class EpgTimelineCanvas : Control, ILogicalScrollable
         context.FillRectangle(surface, new Rect(Bounds.Size));
 
         var now = DateTimeOffset.Now;
-        var minutesPerPixel = 1 / PixelsPerMinute;
+        var minutesPerPixel = 1 / SafePixelsPerMinute;
 
         // Only the visible rows are considered; everything else costs nothing.
         var firstRow = Math.Max(0, (int)(_offset.Y / RowHeight));
@@ -319,8 +344,8 @@ public sealed class EpgTimelineCanvas : Control, ILogicalScrollable
                     break;
                 }
 
-                var left = (programme.Start - WindowStart).TotalMinutes * PixelsPerMinute - _offset.X;
-                var right = (programme.Stop - WindowStart).TotalMinutes * PixelsPerMinute - _offset.X;
+                var left = (programme.Start - WindowStart).TotalMinutes * SafePixelsPerMinute - _offset.X;
+                var right = (programme.Stop - WindowStart).TotalMinutes * SafePixelsPerMinute - _offset.X;
 
                 var width = right - left - BlockGap;
                 if (width <= 1)
@@ -370,7 +395,7 @@ public sealed class EpgTimelineCanvas : Control, ILogicalScrollable
         }
 
         // The now line, last so it sits above every block.
-        var nowX = (now - WindowStart).TotalMinutes * PixelsPerMinute - _offset.X;
+        var nowX = (now - WindowStart).TotalMinutes * SafePixelsPerMinute - _offset.X;
 
         if (nowX >= 0 && nowX <= Bounds.Width)
         {
@@ -498,7 +523,7 @@ public sealed class EpgTimelineCanvas : Control, ILogicalScrollable
         }
 
         var row = _rows[rowIndex];
-        var at = WindowStart.AddMinutes((point.X + _offset.X) / PixelsPerMinute);
+        var at = WindowStart.AddMinutes((point.X + _offset.X) / SafePixelsPerMinute);
 
         foreach (var programme in row.Programmes)
         {
@@ -515,7 +540,7 @@ public sealed class EpgTimelineCanvas : Control, ILogicalScrollable
     public void ScrollToNow()
     {
         var minutes = (DateTimeOffset.Now - WindowStart).TotalMinutes;
-        Offset = new Vector(Math.Max(0, minutes * PixelsPerMinute - 120), _offset.Y);
+        Offset = new Vector(Math.Max(0, minutes * SafePixelsPerMinute - 120), _offset.Y);
     }
 
     protected override void OnKeyDown(KeyEventArgs e)
