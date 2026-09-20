@@ -64,6 +64,16 @@ public partial class PlayerPage : UserControl
         {
             _hideChrome.Stop();
 
+            // Drop the video surface first. LibVLCSharp hosts the floating OSD
+            // in a separate top-most window and keeps it aligned to this
+            // control from the parent window's message loop; once the control
+            // leaves the visual tree that alignment calls PointToScreen on a
+            // rootless visual and throws from inside WndProc, where nothing can
+            // catch it and the process simply dies. Clearing these tears the
+            // overlay down before it can fire again.
+            Video.Content = null;
+            Video.MediaPlayer = null;
+
             // Going Back out of a fullscreen video would otherwise leave the
             // window chromeless with no player in it: no sidebar, no
             // breadcrumbs, and nothing on screen explaining how to get them
@@ -188,14 +198,24 @@ public partial class PlayerPage : UserControl
     /// </remarks>
     private void RestoreFromFullscreen(Window? window)
     {
-        if (window is { WindowState: WindowState.FullScreen })
+        // Immediately, and whether or not a window was found: the shell hiding
+        // its chrome is the part the user cannot undo on their own.
+        WeakReferenceMessenger.Default.Send(new FullscreenChangedMessage(false));
+
+        if (window is not { WindowState: WindowState.FullScreen })
         {
-            window.WindowState = _stateBeforeFullscreen == WindowState.FullScreen
-                ? WindowState.Maximized
-                : _stateBeforeFullscreen;
+            return;
         }
 
-        WeakReferenceMessenger.Default.Send(new FullscreenChangedMessage(false));
+        var target = _stateBeforeFullscreen == WindowState.FullScreen
+            ? WindowState.Maximized
+            : _stateBeforeFullscreen;
+
+        // Posted rather than assigned here. Leaving fullscreen resizes the
+        // window synchronously, and doing that while the visual tree is still
+        // coming apart is what drove the overlay crash above.
+        Dispatcher.UIThread.Post(
+            () => window.WindowState = target, DispatcherPriority.Background);
     }
 
     private void SetFullscreen(bool fullscreen)

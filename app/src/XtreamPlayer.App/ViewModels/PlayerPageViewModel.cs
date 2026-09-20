@@ -4,6 +4,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.Logging;
 using XtreamPlayer.Core.Abstractions;
+using XtreamPlayer.Core.Library;
 using XtreamPlayer.Core.Models;
 using XtreamPlayer.Core.Navigation;
 using XtreamPlayer.Infrastructure.Downloads;
@@ -33,9 +34,6 @@ public sealed partial class PlayerPageViewModel : PageViewModelBase
     /// <summary>Frequent enough to be useful, rare enough to be free.</summary>
     private static readonly TimeSpan CheckpointInterval = TimeSpan.FromSeconds(10);
 
-    /// <summary>Below this, an accidental open should not enter Continue Watching.</summary>
-    private static readonly TimeSpan MinimumWatchedToRecord = TimeSpan.FromSeconds(30);
-
     private readonly IPlaybackService _playback;
     private readonly IResumeRepository _resume;
     private readonly IProfileRepository _profiles;
@@ -50,7 +48,17 @@ public sealed partial class PlayerPageViewModel : PageViewModelBase
 
     private PlaybackRequestParameter? _request;
     private ProfileScope? _scope;
-    private TimeSpan _lastCheckpoint = TimeSpan.MinValue;
+    /// <summary>
+    /// Where the last checkpoint was written, or null if none has been.
+    /// </summary>
+    /// <remarks>
+    /// Nullable rather than a TimeSpan.MinValue sentinel, which is what this
+    /// was. Subtracting MinValue from any real position overflows, so the very
+    /// first checkpoint threw — and because OnNavigatingFromAsync writes one,
+    /// the exception came straight back out of GoBackAsync and took the whole
+    /// app down. Leaving the player after watching anything crashed it.
+    /// </remarks>
+    private TimeSpan? _lastCheckpoint;
     private bool _disposed;
 
     /// <summary>
@@ -329,7 +337,7 @@ public sealed partial class PlayerPageViewModel : PageViewModelBase
         };
 
         MediaTitle = entry.Title;
-        _lastCheckpoint = TimeSpan.MinValue;
+        _lastCheckpoint = null;
 
         OnPropertyChanged(nameof(CanGoToNextEpisode));
         OnPropertyChanged(nameof(CanGoToPreviousEpisode));
@@ -442,7 +450,27 @@ public sealed partial class PlayerPageViewModel : PageViewModelBase
 
     // ---- resume ---------------------------------------------------------
 
+    /// <summary>
+    /// Records where playback has reached, never throwing.
+    /// </summary>
+    /// <remarks>
+    /// OnNavigatingFromAsync awaits this, so anything escaping it comes back out
+    /// of GoBackAsync as an unhandled exception and kills the process. Losing a
+    /// resume point is a nuisance; losing the app is not.
+    /// </remarks>
     private async Task SaveCheckpointAsync()
+    {
+        try
+        {
+            await SaveCheckpointCoreAsync().ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _log.LogWarning(ex, "Could not save the resume checkpoint.");
+        }
+    }
+
+    private async Task SaveCheckpointCoreAsync()
     {
         if (_request is null || _scope is not { } scope || IsLive)
         {
@@ -452,13 +480,7 @@ public sealed partial class PlayerPageViewModel : PageViewModelBase
         var position = _playback.Position;
         var duration = _playback.Duration;
 
-        if (duration <= TimeSpan.Zero || position < MinimumWatchedToRecord)
-        {
-            return;
-        }
-
-        // Skip a write when nothing meaningful moved, which happens while paused.
-        if ((position - _lastCheckpoint).Duration() < TimeSpan.FromSeconds(5))
+        if (!ResumePolicy.ShouldCheckpoint(position, duration, _lastCheckpoint))
         {
             return;
         }

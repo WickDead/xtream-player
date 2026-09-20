@@ -37,6 +37,12 @@ with several audio tracks**, **a downloaded local file**:
       chrome must come back; a player torn off the stack while fullscreen is how
       you end up in a chromeless window with no way out
 - [ ] Closing the player returns to the exact list position
+- [ ] **Watch past 30 seconds, then leave.** Two separate crashes lived here: a
+      resume checkpoint that overflowed on its first write and came back out of
+      GoBackAsync, and the video overlay repositioning against a control that had
+      already left the visual tree. Both killed the process from a place nothing
+      could catch
+- [ ] Leave from fullscreen specifically, by the back arrow and by Escape
 
 Then **ten open/close cycles** on one title, watching memory return to baseline
 with no orphaned libvlc threads. Native wrappers leak somewhere eventually, and
