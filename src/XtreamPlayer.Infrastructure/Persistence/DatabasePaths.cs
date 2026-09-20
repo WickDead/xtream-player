@@ -1,4 +1,4 @@
-namespace XtreamPlayer.Infrastructure.Persistence;
+﻿namespace XtreamPlayer.Infrastructure.Persistence;
 
 /// <summary>
 /// Where application data lives on each platform.
@@ -58,8 +58,8 @@ public static class DatabasePaths
     /// and modified date rather than guessing.
     /// </summary>
     /// <remarks>
-    /// Two bundle identifiers exist because the app was renamed partway through;
-    /// an install of any age may have written under either.
+    /// The previous app was renamed partway through its life, so an install of
+    /// any age may have written under either bundle identifier.
     /// </remarks>
     public static IReadOnlyList<string> LegacyDatabaseCandidates()
     {
