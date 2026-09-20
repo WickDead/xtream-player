@@ -6,9 +6,9 @@
 //
 // Generates the application icon.
 //
-//     dotnet run app/packaging/make-icon.cs
+//     dotnet run packaging/make-icon.cs
 //
-// Writes app/src/XtreamPlayer.App/Assets/icon.ico plus the PNG renders beside
+// Writes src/XtreamPlayer.App/Assets/icon.ico plus the PNG renders beside
 // it. Committed rather than hand-drawn once and forgotten: the icon is geometry,
 // and geometry in source is editable, diffable and reproducible.
 //
@@ -20,7 +20,7 @@
 using SkiaSharp;
 
 var repoRoot = FindRepoRoot();
-var assets = Path.Combine(repoRoot, "app", "src", "XtreamPlayer.App", "Assets");
+var assets = Path.Combine(repoRoot, "src", "XtreamPlayer.App", "Assets");
 Directory.CreateDirectory(assets);
 
 // Every size Windows asks for: Explorer, the taskbar, alt-tab, and the
@@ -336,7 +336,10 @@ static string FindRepoRoot()
 {
     var directory = new DirectoryInfo(AppContext.BaseDirectory);
 
-    while (directory is not null && !Directory.Exists(Path.Combine(directory.FullName, "app")))
+    // By the solution file, not a directory name: the sources used to live
+    // under app/ and naming that here is how it breaks when they move.
+    while (directory is not null
+        && !File.Exists(Path.Combine(directory.FullName, "XtreamPlayer.slnx")))
     {
         directory = directory.Parent;
     }
@@ -344,8 +347,7 @@ static string FindRepoRoot()
     // A file-based app runs from a build directory under the user profile, so
     // the walk above finds nothing; fall back to this file's own location.
     return directory?.FullName
-        ?? Path.GetFullPath(Path.Combine(
-            Path.GetDirectoryName(GetSourcePath())!, "..", ".."));
+        ?? Path.GetFullPath(Path.Combine(Path.GetDirectoryName(GetSourcePath())!, ".."));
 }
 
 static string GetSourcePath([System.Runtime.CompilerServices.CallerFilePath] string path = "") => path;

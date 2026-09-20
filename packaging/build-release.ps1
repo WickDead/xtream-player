@@ -18,7 +18,7 @@
     Skip the test run. Only for a quick local build.
 
 .EXAMPLE
-    pwsh app/packaging/build-release.ps1
+    pwsh packaging/build-release.ps1
 #>
 [CmdletBinding()]
 param(
@@ -28,8 +28,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-$repoRoot = Resolve-Path (Join-Path $PSScriptRoot '..' '..')
-$appRoot  = Join-Path $repoRoot 'app'
+$repoRoot = Resolve-Path (Join-Path $PSScriptRoot '..')
 $distRoot = Join-Path $repoRoot 'dist'
 $payload  = Join-Path $distRoot 'XtreamPlayer'
 
@@ -39,7 +38,7 @@ Write-Host ''
 
 if (-not $SkipTests) {
     Write-Host '=== Tests ===' -ForegroundColor Cyan
-    dotnet test (Join-Path $appRoot 'XtreamPlayer.slnx') -c Release --nologo -v q
+    dotnet test (Join-Path $repoRoot 'XtreamPlayer.slnx') -c Release --nologo -v q
     if ($LASTEXITCODE -ne 0) { throw "Tests failed; not building a release." }
     Write-Host ''
 }
@@ -52,7 +51,7 @@ if (Test-Path $payload) {
     Remove-Item -Recurse -Force $payload
 }
 
-dotnet publish (Join-Path $appRoot 'src/XtreamPlayer.App/XtreamPlayer.App.csproj') `
+dotnet publish (Join-Path $repoRoot 'src/XtreamPlayer.App/XtreamPlayer.App.csproj') `
     -c Release -r win-x64 --self-contained true -o $payload --nologo
 
 if ($LASTEXITCODE -ne 0) { throw 'Publish failed.' }

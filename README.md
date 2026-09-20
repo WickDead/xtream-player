@@ -39,15 +39,15 @@ series, and an XMLTV feed of ~21,700 programmes across 1,082 channels.
 Requires the .NET 10 SDK. Everything else, including libvlc, comes from NuGet.
 
 ```bash
-dotnet build app/XtreamPlayer.slnx
+dotnet build XtreamPlayer.slnx
 ```
 
 ```bash
-dotnet test app/XtreamPlayer.slnx
+dotnet test XtreamPlayer.slnx
 ```
 
 ```bash
-dotnet run --project app/src/XtreamPlayer.App/XtreamPlayer.App.csproj
+dotnet run --project src/XtreamPlayer.App/XtreamPlayer.App.csproj
 ```
 
 ### Releasing
@@ -56,7 +56,7 @@ Publishes a self-contained `win-x64` payload to `dist/XtreamPlayer`, smoke-tests
 it, and builds an installer if Inno Setup is on PATH:
 
 ```bash
-pwsh app/packaging/build-release.ps1
+pwsh packaging/build-release.ps1
 ```
 
 No .NET runtime is needed on the target machine, and libvlc ships with the app
@@ -68,11 +68,11 @@ version skew against somebody's own VLC is a support problem with no good answer
 The app icon is geometry, generated rather than drawn once and lost:
 
 ```bash
-dotnet run app/packaging/make-icon.cs
+dotnet run packaging/make-icon.cs
 ```
 
 It writes a nine-size `.ico` plus PNG renders to
-`app/src/XtreamPlayer.App/Assets`. Below 48px the seek bar is dropped and the
+`src/XtreamPlayer.App/Assets`. Below 48px the seek bar is dropped and the
 play triangle grows to fill the tile, because at 32px the detail collapses into a
 smear and the glyph has to carry the icon on its own.
 
@@ -120,14 +120,13 @@ per catalog took the search to 11 ms and opening Movies from 40 ms to 3 ms.
 ## Layout
 
 ```
-app/
-  src/XtreamPlayer.Core/            models, navigation, filtering, EPG timeline
-  src/XtreamPlayer.Infrastructure/  SQLite, Xtream client, XMLTV, downloads
-  src/XtreamPlayer.Playback/        LibVLCSharp: playback and recording
-  src/XtreamPlayer.App/             Avalonia views and view models
-  tests/XtreamPlayer.Tests/         362 tests, pure logic
-  tests/XtreamPlayer.UiTests/       34 headless tests driving real views
-  packaging/                        release script, installer, icon generator
+src/XtreamPlayer.Core/            models, navigation, filtering, EPG timeline
+src/XtreamPlayer.Infrastructure/  SQLite, Xtream client, XMLTV, downloads
+src/XtreamPlayer.Playback/        LibVLCSharp: playback and recording
+src/XtreamPlayer.App/             Avalonia views and view models
+tests/XtreamPlayer.Tests/         362 tests, pure logic
+tests/XtreamPlayer.UiTests/       34 headless tests driving real views
+packaging/                        release script, installer, icon generator
 ```
 
 The navigation engine lives in `Core`, not `App`. It is the headline feature and

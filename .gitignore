@@ -23,9 +23,8 @@ dist-ssr
 
 # Local tooling and build outputs
 .playwright-mcp/
-src-tauri/target/
 
 # .NET / Avalonia app
-app/**/bin/
-app/**/obj/
+**/bin/
+**/obj/
 *.user

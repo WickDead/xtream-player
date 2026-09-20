@@ -9,8 +9,8 @@ trade when a command answers the same question in twenty seconds.
 
 ## Before calling a build good
 
-- [ ] `dotnet test app/XtreamPlayer.slnx` — all green
-- [ ] `pwsh app/packaging/build-release.ps1` — publishes, trims, smoke-tests
+- [ ] `dotnet test XtreamPlayer.slnx` — all green
+- [ ] `pwsh packaging/build-release.ps1` — publishes, trims, smoke-tests
 - [ ] Launch the published exe, not just `dotnet run`. A release build differs in
       output type, trimming and ReadyToRun, and all three have broken startup before.
 

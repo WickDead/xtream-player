@@ -22,10 +22,14 @@ public sealed class ViewConventionTests(ITestOutputHelper output)
     {
         get
         {
-            // Walk up from the test binaries to the repository's app folder.
+            // Walk up from the test binaries to the repository root, found by
+            // the solution file rather than by a directory name — the sources
+            // used to live under app/ and that assumption broke silently when
+            // they moved.
             var directory = new DirectoryInfo(AppContext.BaseDirectory);
 
-            while (directory is not null && directory.Name != "app")
+            while (directory is not null
+                && !File.Exists(Path.Combine(directory.FullName, "XtreamPlayer.slnx")))
             {
                 directory = directory.Parent;
             }

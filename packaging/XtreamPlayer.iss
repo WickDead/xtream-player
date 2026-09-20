@@ -1,9 +1,9 @@
 ; Inno Setup script for Xtream Player.
 ;
 ; Build the payload first:
-;     pwsh app/packaging/build-release.ps1
+;     pwsh packaging/build-release.ps1
 ; then compile this with Inno Setup 6:
-;     iscc app/packaging/XtreamPlayer.iss
+;     iscc packaging/XtreamPlayer.iss
 ;
 ; Inno Setup rather than MSI or a framework with an update service: this is a
 ; single-user desktop app with no services, no COM registration and no drivers.
@@ -13,7 +13,7 @@
 #define AppVersion     "0.2.0"
 #define AppPublisher   "XtreamPlayer"
 #define AppExeName     "XtreamPlayer.exe"
-#define SourceDir      "..\..\dist\XtreamPlayer"
+#define SourceDir      "..\dist\XtreamPlayer"
 
 [Setup]
 AppId={{8E4C1F2A-9D3B-4A6E-B17C-5F0E2A8D6C41}
@@ -30,7 +30,7 @@ DefaultGroupName={#AppName}
 DisableProgramGroupPage=yes
 DisableDirPage=no
 
-OutputDir=..\..\dist
+OutputDir=..\dist
 OutputBaseFilename=XtreamPlayer-{#AppVersion}-win-x64-setup
 Compression=lzma2/max
 SolidCompression=yes
