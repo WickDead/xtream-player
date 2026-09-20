@@ -63,6 +63,19 @@ No .NET runtime is needed on the target machine, and libvlc ships with the app
 rather than being borrowed from whatever VLC the user happens to have installed —
 version skew against somebody's own VLC is a support problem with no good answer.
 
+### The icon
+
+The app icon is geometry, generated rather than drawn once and lost:
+
+```bash
+dotnet run app/packaging/make-icon.cs
+```
+
+It writes a nine-size `.ico` plus PNG renders to
+`app/src/XtreamPlayer.App/Assets`. Below 48px the seek bar is dropped and the
+play triangle grows to fill the tile, because at 32px the detail collapses into a
+smear and the glyph has to carry the icon on its own.
+
 ## Headless commands
 
 The app is a GUI, but the pipelines underneath it are verifiable without one.
@@ -113,7 +126,7 @@ app/
   src/XtreamPlayer.Playback/        LibVLCSharp: playback and recording
   src/XtreamPlayer.App/             Avalonia views and view models
   tests/XtreamPlayer.Tests/         342 tests
-  packaging/                        release script and Inno Setup installer
+  packaging/                        release script, installer, icon generator
 ```
 
 The navigation engine lives in `Core`, not `App`. It is the headline feature and

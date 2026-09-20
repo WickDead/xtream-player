@@ -4,6 +4,11 @@
     <RootNamespace>XtreamPlayer.App</RootNamespace>
     <AssemblyName>XtreamPlayer</AssemblyName>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+
+    <!-- Embedded in the executable, which is what Explorer, the taskbar and the
+         installer's uninstall entry all read. Regenerate with
+         `dotnet run app/packaging/make-icon.cs`. -->
+    <ApplicationIcon>Assets\icon.ico</ApplicationIcon>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
 
     <Version>0.2.0</Version>
@@ -40,6 +45,13 @@
     <PublishReadyToRun>true</PublishReadyToRun>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- PNGs only: the .ico is already embedded in the executable by
+         ApplicationIcon, and shipping it again inside the assembly would add
+         140 KB for nothing. -->
+    <AvaloniaResource Include="Assets\*.png" />
+  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="../XtreamPlayer.Core/XtreamPlayer.Core.csproj" />

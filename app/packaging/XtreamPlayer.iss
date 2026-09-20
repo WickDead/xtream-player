@@ -40,6 +40,10 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 
 WizardStyle=modern
+
+; The setup wizard's own icon, and the one Add/Remove Programs shows. The
+; uninstall entry points at the executable, which carries the icon already.
+SetupIconFile=..\src\XtreamPlayer.App\Assets\icon.ico
 UninstallDisplayIcon={app}\{#AppExeName}
 
 [Languages]
