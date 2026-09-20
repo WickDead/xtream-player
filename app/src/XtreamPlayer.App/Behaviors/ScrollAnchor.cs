@@ -1,4 +1,4 @@
-using Avalonia;
+﻿using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Threading;
@@ -190,6 +190,13 @@ public static class ScrollAnchor
 
         if (!usePixels)
         {
+            // ScrollIntoView only guarantees the item is visible, and scrolling
+            // down leaves it at the bottom edge — a whole viewport away from
+            // where it was. Put it back at the top, which is where it was when
+            // the position was captured.
+            Dispatcher.UIThread.Post(
+                () => AlignToTop(control, scroller, targetIndex), DispatcherPriority.Loaded);
+
             return;
         }
 
@@ -285,6 +292,37 @@ public static class ScrollAnchor
         }
 
         return (0, (items[0] as IScrollKeyed)?.ScrollKey);
+    }
+
+    /// <summary>
+    /// Puts the anchored item at the top of the viewport.
+    /// </summary>
+    /// <remarks>
+    /// Measured from the realized container rather than computed as
+    /// index × height, because rows are not guaranteed to be uniform and a
+    /// poster grid's chunked rows certainly are not.
+    /// </remarks>
+    private static void AlignToTop(Control control, ScrollViewer scroller, int index)
+    {
+        if (control is not ItemsControl items || index < 0 || index >= items.ItemCount)
+        {
+            return;
+        }
+
+        if (items.ContainerFromIndex(index) is not { } container)
+        {
+            // Still unrealized; being in view is the best that can be offered.
+            return;
+        }
+
+        if (container.TranslatePoint(default, scroller) is not { } position)
+        {
+            return;
+        }
+
+        var target = Math.Max(0, scroller.Offset.Y + position.Y);
+
+        scroller.Offset = scroller.Offset.WithY(target);
     }
 
     private static void ScrollToIndex(Control control, int index)
