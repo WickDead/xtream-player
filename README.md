@@ -125,12 +125,20 @@ app/
   src/XtreamPlayer.Infrastructure/  SQLite, Xtream client, XMLTV, downloads
   src/XtreamPlayer.Playback/        LibVLCSharp: playback and recording
   src/XtreamPlayer.App/             Avalonia views and view models
-  tests/XtreamPlayer.Tests/         342 tests
+  tests/XtreamPlayer.Tests/         362 tests, pure logic
+  tests/XtreamPlayer.UiTests/       18 headless tests driving real views
   packaging/                        release script, installer, icon generator
 ```
 
 The navigation engine lives in `Core`, not `App`. It is the headline feature and
 has to be testable without a UI.
+
+`XtreamPlayer.UiTests` runs the real application headlessly, so tests build real
+views and tear them down. It exists because two crashes shipped from the player's
+teardown — visual-tree lifecycle bugs that no amount of pure-logic testing could
+reach, and that only happen when a real control is really attached and then
+really removed. The harness reproduced the second one on its first run, with the
+identical exception.
 
 ## Where your data lives
 

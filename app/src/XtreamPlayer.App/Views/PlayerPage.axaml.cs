@@ -64,15 +64,10 @@ public partial class PlayerPage : UserControl
         {
             _hideChrome.Stop();
 
-            // Drop the video surface first. LibVLCSharp hosts the floating OSD
-            // in a separate top-most window and keeps it aligned to this
-            // control from the parent window's message loop; once the control
-            // leaves the visual tree that alignment calls PointToScreen on a
-            // rootless visual and throws from inside WndProc, where nothing can
-            // catch it and the process simply dies. Clearing these tears the
-            // overlay down before it can fire again.
-            Video.Content = null;
-            Video.MediaPlayer = null;
+            if (DataContext is PlayerPageViewModel leaving)
+            {
+                leaving.Leaving -= OnLeaving;
+            }
 
             // Going Back out of a fullscreen video would otherwise leave the
             // window chromeless with no player in it: no sidebar, no
@@ -102,20 +97,58 @@ public partial class PlayerPage : UserControl
     /// BEFORE the handle exists. Assign it in XAML or a constructor and libvlc
     /// quietly opens its own separate window instead of drawing into ours.
     /// </remarks>
+    /// <summary>
+    /// Releases the video surface while the control still has a root.
+    /// </summary>
+    /// <remarks>
+    /// Doing this on detach instead is what a headless teardown test caught: the
+    /// assignment fires LibVLCSharp's property-changed handler, which realigns
+    /// the floating overlay by asking this control where it is on screen, and a
+    /// control with no root has no answer. It threw exactly the exception the
+    /// shipped build died with.
+    /// </remarks>
+    private void ReleaseVideoSurface()
+    {
+        if (Video.MediaPlayer is null && Video.Content is null)
+        {
+            return;
+        }
+
+        Video.MediaPlayer = null;
+        Video.Content = null;
+    }
+
     private void OnAttached(object? sender, VisualTreeAttachmentEventArgs e)
     {
         Dispatcher.UIThread.Post(() =>
         {
-            if (DataContext is PlayerPageViewModel vm
-                && vm.Playback is VlcPlaybackService service)
+            if (DataContext is PlayerPageViewModel vm)
             {
-                Video.MediaPlayer = service.MediaPlayer;
+                vm.Leaving -= OnLeaving;
+                vm.Leaving += OnLeaving;
+
+                if (vm.Playback is VlcPlaybackService service)
+                {
+                    Video.MediaPlayer = service.MediaPlayer;
+                }
             }
 
             Focus();
             ShowChrome();
         }, DispatcherPriority.Loaded);
     }
+
+    private void OnLeaving(object? sender, EventArgs e) => ReleaseVideoSurface();
+
+    /// <summary>
+    /// The leaving path, for the headless teardown tests.
+    /// </summary>
+    /// <remarks>
+    /// Exposed because the alternative is constructing the whole view model
+    /// graph — a playback engine, repositories and a navigation service — to
+    /// reach one line that is entirely about this control.
+    /// </remarks>
+    internal void ReleaseVideoSurfaceForTesting() => ReleaseVideoSurface();
 
     private void ShowChrome()
     {

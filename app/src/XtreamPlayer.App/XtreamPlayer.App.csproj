@@ -47,6 +47,13 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- The headless UI tests drive real views, and reach one or two internals
+         that exist only so a test can trigger a path without building the whole
+         view model graph behind it. -->
+    <InternalsVisibleTo Include="XtreamPlayer.UiTests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- PNGs only: the .ico is already embedded in the executable by
          ApplicationIcon, and shipping it again inside the assembly would add
          140 KB for nothing. -->

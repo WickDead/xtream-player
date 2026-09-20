@@ -11,5 +11,6 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/XtreamPlayer.Tests/XtreamPlayer.Tests.csproj" />
+    <Project Path="tests/XtreamPlayer.UiTests/XtreamPlayer.UiTests.csproj" />
   </Folder>
 </Solution>

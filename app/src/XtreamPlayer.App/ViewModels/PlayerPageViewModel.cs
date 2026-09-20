@@ -546,8 +546,24 @@ public sealed partial class PlayerPageViewModel : PageViewModelBase
         return all.FirstOrDefault(p => p.Id == activeId) ?? all.FirstOrDefault();
     }
 
+    /// <summary>
+    /// Raised as the page is leaving, while its view is still in the tree.
+    /// </summary>
+    /// <remarks>
+    /// The video surface has to be released here rather than on detach. It is a
+    /// native child window with a separate floating overlay that realigns itself
+    /// whenever certain properties change, and that alignment asks the control
+    /// where it is on screen — which throws once the control has no root, from
+    /// inside a property-changed handler where nothing can catch it. Released
+    /// while still attached, the question has an answer.
+    /// </remarks>
+    public event EventHandler? Leaving;
+
     public override async Task OnNavigatingFromAsync(NavigationDirection direction)
     {
+        // Before anything else, and while the view still has a root.
+        Leaving?.Invoke(this, EventArgs.Empty);
+
         // The last checkpoint, before the session goes away.
         await SaveCheckpointAsync().ConfigureAwait(false);
         await base.OnNavigatingFromAsync(direction).ConfigureAwait(false);
