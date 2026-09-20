@@ -126,7 +126,7 @@ app/
   src/XtreamPlayer.Playback/        LibVLCSharp: playback and recording
   src/XtreamPlayer.App/             Avalonia views and view models
   tests/XtreamPlayer.Tests/         362 tests, pure logic
-  tests/XtreamPlayer.UiTests/       22 headless tests driving real views
+  tests/XtreamPlayer.UiTests/       34 headless tests driving real views
   packaging/                        release script, installer, icon generator
 ```
 
