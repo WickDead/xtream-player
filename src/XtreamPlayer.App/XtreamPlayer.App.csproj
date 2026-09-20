@@ -11,7 +11,7 @@
     <ApplicationIcon>Assets\icon.ico</ApplicationIcon>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
 
-    <Version>0.2.0</Version>
+    <Version>0.9.0</Version>
     <Company>XtreamPlayer</Company>
     <Product>Xtream Player</Product>
     <Description>An Xtream IPTV player with a real back stack, an XMLTV guide and a built-in video engine.</Description>

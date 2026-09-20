@@ -10,7 +10,7 @@
 ; A per-user install needs no elevation at all, which means no UAC prompt.
 
 #define AppName        "Xtream Player"
-#define AppVersion     "0.2.0"
+#define AppVersion     "0.9.0"
 #define AppPublisher   "XtreamPlayer"
 #define AppExeName     "XtreamPlayer.exe"
 #define SourceDir      "..\dist\XtreamPlayer"

@@ -53,7 +53,7 @@ internal static class LegacyDatabaseBuilder
             INSERT INTO profiles
                 (id, name, server_url, username, password, status, expires_at,
                  max_connections, created_at, updated_at)
-            VALUES ($id, $name, 'playwithme.pw', 'user', $pw, 'Active', '1964974277', 2,
+            VALUES ($id, $name, 'provider.example', 'user', $pw, 'Active', '1964974277', 2,
                     '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z');
             """,
             ("$id", id), ("$name", name), ("$pw", password));
@@ -125,7 +125,7 @@ public sealed class LegacyImporterTests
         var profile = Assert.Single(await db.Profiles.ListAsync());
         Assert.Equal("Wicked", profile.Name);
         // The old app stored the server URL unnormalized.
-        Assert.Equal("http://playwithme.pw", profile.ServerUrl);
+        Assert.Equal("http://provider.example", profile.ServerUrl);
         Assert.Equal("plaintext-pw", profile.Password);
 
         var scope = new ProfileScope(profile.Id);

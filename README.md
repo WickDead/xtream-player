@@ -12,6 +12,11 @@ Three things drove the rewrite:
   files through the same player, with audio and subtitle track switching.
 - **A real XMLTV guide**, not a placeholder.
 
+> **This is a beta.** Everything here is built and tested, but the parts that
+> need real hardware and a real provider — live TV, audio and subtitle switching,
+> memory over a long session — have not yet been through a human's hands. That is
+> what this round is for; see [reporting a problem](#reporting-a-problem).
+
 ## Status
 
 | Phase | |
@@ -33,6 +38,36 @@ series, and an XMLTV feed of ~21,700 programmes across 1,082 channels.
 > functional. It is the fallback and the reference for provider response shapes,
 > and it comes out only after a stretch of daily use on the new app. Its final
 > state is tagged `v0.1.2-tauri-final`.
+
+## Installing
+
+Download the installer from [Releases](../../releases) and run it. It installs
+per user, so there is no administrator prompt, and it needs nothing else present
+— not .NET, not VLC.
+
+**Windows will warn you.** The installer is not code-signed, so SmartScreen shows
+"Windows protected your PC". Choose **More info**, then **Run anyway**. A signing
+certificate costs a few hundred a year and has not been bought for a beta; if
+that is not a trade you want to make, build from source instead.
+
+On first run it is empty. Add your provider on the Providers page and it fetches
+the catalogs from there.
+
+## Reporting a problem
+
+The useful thing to send is the log folder:
+
+```
+%LOCALAPPDATA%\XtreamPlayer\logs
+```
+
+`crash.log` holds the stack of anything that killed the app, and it is the single
+most useful file — two crashes in this project were diagnosed from it precisely
+rather than guessed at. Credentials are stripped from every log before they are
+written, so these are safe to share, though skim one if you would rather check.
+
+Worth saying what you were doing. The bugs that get through tend to be about
+sequence rather than any one screen.
 
 ## Building
 
@@ -174,6 +209,10 @@ overlap the previous one on their channel. They are resolved into a clean
 timeline before rendering, preferring the more specific listing where two cover
 the same moment. A handful of channels publish nothing but overlapping duplicates
 of one title, and those legitimately collapse to a few blocks.
+
+**libvlc is LGPL, and this installer redistributes it.** Attributions for
+everything bundled are in [THIRD-PARTY.md](THIRD-PARTY.md). libvlc ships as its
+own DLLs rather than linked into the executable, so it can be replaced.
 
 **Linux needs system VLC.** There is no libvlc NuGet package for Linux; install
 your distribution's `vlc` and `vlc-plugin-base`. Embedding also relies on X11, so
