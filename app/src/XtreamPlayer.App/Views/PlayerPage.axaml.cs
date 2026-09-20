@@ -1,4 +1,4 @@
-using Avalonia;
+﻿using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
@@ -6,6 +6,7 @@ using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using CommunityToolkit.Mvvm.Messaging;
 using XtreamPlayer.App.ViewModels;
 using XtreamPlayer.Playback;
 
@@ -37,7 +38,20 @@ public partial class PlayerPage : UserControl
         };
 
         PointerMoved += (_, _) => ShowChrome();
-        PointerPressed += (_, _) => ShowChrome();
+
+        PointerPressed += (_, e) =>
+        {
+            ShowChrome();
+
+            // Double-click the picture to toggle fullscreen. Ignored on the
+            // controls themselves, where a double-click on a button or the seek
+            // bar means something else entirely.
+            if (e.ClickCount == 2 && e.Source is not Button and not Slider and not ComboBox)
+            {
+                ToggleFullscreen();
+                e.Handled = true;
+            }
+        };
 
         SeekSlider.AddHandler(PointerPressedEvent, OnSeekPressed, RoutingStrategies.Tunnel);
         SeekSlider.AddHandler(PointerReleasedEvent, OnSeekReleased, RoutingStrategies.Tunnel);
@@ -46,7 +60,21 @@ public partial class PlayerPage : UserControl
         FullscreenButton.Click += (_, _) => ToggleFullscreen();
 
         AttachedToVisualTree += OnAttached;
-        DetachedFromVisualTree += (_, _) => _hideChrome.Stop();
+        DetachedFromVisualTree += (_, e) =>
+        {
+            _hideChrome.Stop();
+
+            // Going Back out of a fullscreen video would otherwise leave the
+            // window chromeless with no player in it: no sidebar, no
+            // breadcrumbs, and nothing on screen explaining how to get them
+            // back.
+            //
+            // The window comes from the event rather than from this control:
+            // by the time a detach runs, GetTopLevel can already return null,
+            // and bailing out here is precisely how the chrome would stay
+            // hidden with nothing to restore it.
+            RestoreFromFullscreen(e.Root as Window);
+        };
 
         KeyDown += OnKeyDown;
         Focusable = true;
@@ -129,13 +157,83 @@ public partial class PlayerPage : UserControl
         }
     }
 
-    private void ToggleFullscreen()
+    /// <summary>
+    /// What the window was before fullscreen, so leaving it restores that
+    /// rather than always dropping to a restored window.
+    /// </summary>
+    private WindowState _stateBeforeFullscreen = WindowState.Maximized;
+
+    private void ToggleFullscreen() => SetFullscreen(!IsFullscreen);
+
+    private static bool IsFullscreenWindow(Visual visual) =>
+        TopLevel.GetTopLevel(visual) is Window { WindowState: WindowState.FullScreen };
+
+    private bool IsFullscreen => IsFullscreenWindow(this);
+
+    /// <summary>
+    /// Takes the window fullscreen and asks the shell to give up its chrome.
+    /// </summary>
+    /// <remarks>
+    /// Both halves are needed. The window state alone leaves the sidebar,
+    /// breadcrumb bar and status bar holding their space, so the video ends up
+    /// letterboxed inside a chromeless window instead of filling the screen —
+    /// which is what "fullscreen" did before.
+    /// </remarks>
+    /// <summary>
+    /// Unconditionally returns the shell to its normal chrome.
+    /// </summary>
+    /// <remarks>
+    /// The message is sent whether or not a window was found, because the shell
+    /// hiding its chrome is the part the user cannot undo on their own.
+    /// </remarks>
+    private void RestoreFromFullscreen(Window? window)
     {
-        if (TopLevel.GetTopLevel(this) is Window window)
+        if (window is { WindowState: WindowState.FullScreen })
         {
-            window.WindowState = window.WindowState == WindowState.FullScreen
-                ? WindowState.Normal
-                : WindowState.FullScreen;
+            window.WindowState = _stateBeforeFullscreen == WindowState.FullScreen
+                ? WindowState.Maximized
+                : _stateBeforeFullscreen;
+        }
+
+        WeakReferenceMessenger.Default.Send(new FullscreenChangedMessage(false));
+    }
+
+    private void SetFullscreen(bool fullscreen)
+    {
+        if (TopLevel.GetTopLevel(this) is not Window window)
+        {
+            return;
+        }
+
+        var already = window.WindowState == WindowState.FullScreen;
+
+        if (already == fullscreen)
+        {
+            // Still re-assert the shell's state: it can drift if the window left
+            // fullscreen by some route other than this method.
+            WeakReferenceMessenger.Default.Send(new FullscreenChangedMessage(fullscreen));
+            return;
+        }
+
+        if (fullscreen)
+        {
+            _stateBeforeFullscreen = window.WindowState;
+            window.WindowState = WindowState.FullScreen;
+        }
+        else
+        {
+            window.WindowState = _stateBeforeFullscreen == WindowState.FullScreen
+                ? WindowState.Maximized
+                : _stateBeforeFullscreen;
+        }
+
+        WeakReferenceMessenger.Default.Send(new FullscreenChangedMessage(fullscreen));
+
+        if (fullscreen)
+        {
+            // The video's native child window takes focus when it resizes, and
+            // without this the keyboard shortcuts stop reaching this page.
+            Dispatcher.UIThread.Post(() => Focus(), DispatcherPriority.Loaded);
         }
     }
 
@@ -176,9 +274,9 @@ public partial class PlayerPage : UserControl
             // First Escape leaves fullscreen, second closes the player. Jumping
             // straight out of a fullscreen video is disorienting.
             case Key.Escape:
-                if (TopLevel.GetTopLevel(this) is Window { WindowState: WindowState.FullScreen })
+                if (IsFullscreen)
                 {
-                    ToggleFullscreen();
+                    SetFullscreen(false);
                 }
                 else
                 {

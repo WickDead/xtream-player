@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
@@ -77,6 +77,10 @@ public sealed partial class ShellViewModel : ObservableObject
 
         _catalog.Progress += (_, progress) => StatusMessage = progress.Message;
 
+        WeakReferenceMessenger.Default.Register<FullscreenChangedMessage>(this,
+            (_, message) => Avalonia.Threading.Dispatcher.UIThread.Post(
+                () => IsFullscreen = message.IsFullscreen));
+
         WeakReferenceMessenger.Default.Register<ProfilesChangedMessage>(this,
             (_, message) => _ = OnProfilesChangedAsync(message));
     }
@@ -84,6 +88,12 @@ public sealed partial class ShellViewModel : ObservableObject
     public ObservableCollection<Profile> Profiles { get; } = [];
 
     public ObservableCollection<LegacyDatabaseInfo> LegacyDatabases { get; } = [];
+
+    /// <summary>
+    /// Hides every piece of shell chrome so the video owns the whole window.
+    /// </summary>
+    [ObservableProperty]
+    private bool _isFullscreen;
 
     /// <summary>The primary sidebar destinations, in the order they are used.</summary>
     public IReadOnlyList<NavDestination> Destinations { get; } =

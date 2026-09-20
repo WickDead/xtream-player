@@ -26,7 +26,16 @@ with several audio tracks**, **a downloaded local file**:
 - [ ] Pause and resume
 - [ ] Seek forward and back — and the seek bar is **absent** for live
 - [ ] Switch audio track; switch subtitle track; load an external `.srt`
-- [ ] Fullscreen in and out; Escape exits fullscreen before it goes Back
+- [ ] Fullscreen in and out, by the button, `F`, and double-clicking the picture
+- [ ] **In fullscreen the video fills the screen** — no sidebar, no breadcrumb
+      bar, no status bar. The window state alone is not enough; the shell has to
+      give up its chrome, and it did not used to
+- [ ] Escape exits fullscreen before it goes Back
+- [ ] Maximise, go fullscreen, come back — the window is maximised again, not
+      restored to a small one
+- [ ] Go fullscreen and then navigate away with Alt+Left rather than Escape. The
+      chrome must come back; a player torn off the stack while fullscreen is how
+      you end up in a chromeless window with no way out
 - [ ] Closing the player returns to the exact list position
 
 Then **ten open/close cycles** on one title, watching memory return to baseline

@@ -13,3 +13,15 @@ namespace XtreamPlayer.App.ViewModels;
 /// cannot keep the shell alive through a subscription.
 /// </remarks>
 public sealed record ProfilesChangedMessage(string? ActivateProfileId = null);
+
+/// <summary>
+/// Asks the shell to hide or restore its chrome for fullscreen playback.
+/// </summary>
+/// <remarks>
+/// The window going to <c>WindowState.FullScreen</c> is only half of it: the
+/// sidebar, breadcrumb bar and status bar still hold their space, so the video
+/// ends up letterboxed inside a chromeless window rather than filling the
+/// screen. Only the shell can give that space up, and the player has no
+/// reference to it.
+/// </remarks>
+public sealed record FullscreenChangedMessage(bool IsFullscreen);

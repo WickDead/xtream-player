@@ -17,7 +17,10 @@
 
     <!-- Sidebar. Icon + label, narrow, always visible: with six destinations a
          collapsible rail would cost a click to save 90px. -->
-    <Border Grid.Column="0" Width="188" Background="{DynamicResource SurfaceSunken}">
+    <!-- Every piece of chrome collapses for fullscreen, so the page host is
+         the only thing left holding space and the video fills the screen. -->
+    <Border Grid.Column="0" Width="188" Background="{DynamicResource SurfaceSunken}"
+            IsVisible="{Binding !IsFullscreen}">
       <Grid RowDefinitions="Auto,*,Auto">
 
         <StackPanel Grid.Row="0" Margin="16,18,16,14" Spacing="2">
@@ -53,7 +56,8 @@
     <Grid Grid.Column="1" RowDefinitions="Auto,Auto,*,Auto">
 
       <!-- Top bar: history controls, breadcrumbs, search, provider, sync. -->
-      <Border Grid.Row="0" Background="{DynamicResource Surface}" Padding="14,10">
+      <Border Grid.Row="0" Background="{DynamicResource Surface}" Padding="14,10"
+              IsVisible="{Binding !IsFullscreen}">
         <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto">
 
           <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="2" Margin="0,0,10,0">
@@ -111,7 +115,7 @@
       </Border>
 
       <!-- Notices, shown only when they apply. -->
-      <StackPanel Grid.Row="1">
+      <StackPanel Grid.Row="1" IsVisible="{Binding !IsFullscreen}">
         <Border Background="{DynamicResource SurfaceRaised}" Padding="14,9"
                 IsVisible="{Binding QuarantineNotice, Converter={x:Static ObjectConverters.IsNotNull}}">
           <TextBlock Text="{Binding QuarantineNotice}" TextWrapping="Wrap"
@@ -123,7 +127,8 @@
       <ContentControl Grid.Row="2" Content="{Binding CurrentPage}" />
 
       <!-- Status bar. -->
-      <Border Grid.Row="3" Background="{DynamicResource SurfaceSunken}" Padding="14,6">
+      <Border Grid.Row="3" Background="{DynamicResource SurfaceSunken}" Padding="14,6"
+              IsVisible="{Binding !IsFullscreen}">
         <Grid ColumnDefinitions="*,Auto">
           <TextBlock Grid.Column="0" Classes="muted" Text="{Binding StatusMessage}"
                      VerticalAlignment="Center" />
