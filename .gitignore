@@ -28,3 +28,11 @@ dist-ssr
 **/bin/
 **/obj/
 *.user
+
+# Private backend and browser test artifacts
+packaging/server/.env
+src/XtreamPlayer.Server/data/
+playwright-report/
+test-results/
+node_modules/
+**/TestResults/

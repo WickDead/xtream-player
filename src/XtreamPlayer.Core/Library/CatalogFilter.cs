@@ -31,6 +31,9 @@ public sealed record FilterRequest
 
     /// <summary>Recently watched ids, newest first. Live only.</summary>
     public IReadOnlyList<string> RecentIds { get; init; } = [];
+
+    /// <summary>Series with an episode aired in the last week. Series only.</summary>
+    public IReadOnlySet<string> NewThisWeekIds { get; init; } = new HashSet<string>();
 }
 
 /// <summary>
@@ -137,6 +140,7 @@ public static class CatalogFilter
         {
             CategorySelection.Favorites => request.FavoriteIds.Contains(item.Id),
             CategorySelection.Recent => request.RecentIds.Contains(item.Id),
+            CategorySelection.NewThisWeek => request.NewThisWeekIds.Contains(item.Id),
             CategorySelection.Real real => item.CategoryId == real.CategoryId,
 
             // Hidden categories are excluded from All but remain reachable by
@@ -222,9 +226,10 @@ public static class CatalogFilter
         bool showHidden,
         int totalCount,
         int favoriteCount,
-        int recentCount = -1)
+        int recentCount = -1,
+        int newThisWeekCount = 0)
     {
-        var rows = new List<CategoryRow>(categories.Count + 3)
+        var rows = new List<CategoryRow>(categories.Count + 4)
         {
             new()
             {
@@ -233,6 +238,16 @@ public static class CatalogFilter
                 Count = totalCount,
             },
         };
+
+        if (newThisWeekCount > 0)
+        {
+            rows.Add(new CategoryRow
+            {
+                Selection = CategorySelection.NewThisWeek.Instance,
+                Name = "New This Week",
+                Count = newThisWeekCount,
+            });
+        }
 
         if (favoriteCount > 0)
         {

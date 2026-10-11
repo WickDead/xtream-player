@@ -1,0 +1,143 @@
+@inject DirectProviderClient Api
+@inject BrowserStore Store
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+
+<PageTitle>Xtream Player</PageTitle>
+<div class="shell" data-theme="@_theme">
+    <aside class="sidebar">
+        <a class="brand" href="#home"><span class="brand-mark">▶</span><span>Xtream<small>YOUR PERSONAL CINEMA</small></span></a>
+        <div class="nav-label">LIBRARY</div>
+        @foreach (var link in Links)
+        {
+            <a href="#@link.Route" class="nav-link @(_route == link.Route ? "selected" : "")"><span>@link.Icon</span>@link.Name</a>
+        }
+        <div class="sidebar-note"><span class="status-dot @(!_online ? "offline" : "")"></span>@(_online ? "Ready to explore" : "Offline · saved catalogs")<small>Direct from your IPTV provider.</small></div>
+    </aside>
+    <div class="workspace">
+        <header class="topbar">
+            <a class="mobile-brand" href="#home">▶ Xtream</a>
+            <div class="breadcrumb">YOUR LIBRARY <span>/</span> @PageTitle</div>
+            <select aria-label="Active provider" value="@_provider" @onchange="ProviderChanged">
+                <option value="">Select provider</option>
+                @foreach (var p in _providers) { <option value="@p.Id">@p.Name</option> }
+            </select>
+            <a class="settings-link" href="#settings" aria-label="Settings">⚙</a>
+        </header>
+        <nav class="mobile-sections" aria-label="Library sections">@foreach (var link in Links) { <a href="#@link.Route" class="@(_route == link.Route ? "selected" : "")">@link.Name</a> }</nav>
+        @if (!_online) { <div class="notice">You’re offline. Saved catalogs are available. Connect to the internet to play.</div> }
+        @if (_update) { <div class="notice">An update is ready. <button @onclick="() => Run(UpdateApp)">Update app</button></div> }
+        @if (_message is not null) { <div class="notice" role="status">@_message <button aria-label="Dismiss message" @onclick="() => _message = null">×</button></div> }
+        @if (_busy) { <div class="busy" role="status">Working…</div> }
+        <main>
+            @if (!_initialized)
+            {
+                <section class="empty"><div class="brand-mark">▶</div><h1>Opening your library</h1><p>Getting everything ready.</p></section>
+            }
+            else if (_playing is not null)
+            {
+                <section class="player-panel">
+                    <div class="section-heading"><div><span class="eyebrow">NOW PLAYING</span><h1>@_playing.Name</h1></div><button @onclick="() => Run(StopPlayback)">Close player</button></div>
+                    <video id="player" controls playsinline preload="metadata" aria-label="@_playing.Name"></video>
+                    <p class="muted">Use your iPhone’s volume buttons. Tap the player for fullscreen and available AirPlay controls.</p>
+                </section>
+            }
+            @if (_route == "home")
+            {
+                <section class="hero">
+                    <div><span class="eyebrow">MAKE YOURSELF AT HOME</span><h1>Your favorites.<br />Your front row.</h1><p>Live moments, movie nights, and the next episode.<br class="desktop-only" /> Everything you love, in one place.</p>
+                    <div class="actions"><a class="button primary" href="@(_providers.Count == 0 ? "#settings" : "#live")">@(_providers.Count == 0 ? "Connect your library" : "Explore live TV") <span>↗</span></a><a class="button" href="#series">Explore series</a></div></div>
+                    <div class="hero-art" aria-hidden="true"><div class="orbit"></div><div class="screen"><span>▶</span><div class="screen-line"></div></div><span class="art-caption">PRESS PLAY. FEEL AT HOME.</span></div>
+                </section>
+                <div class="section-heading"><div><span class="eyebrow">PICK UP WHERE YOU LEFT OFF</span><h2>Continue watching</h2></div><span class="muted">On this device</span></div>
+                @if (_library.Progress.Values.Any(p => p.Position / Math.Max(p.Duration, 1) < .95))
+                {
+                    <div class="continue-grid">@foreach (var p in _library.Progress.Values.Where(p => p.Position / Math.Max(p.Duration, 1) < .95).OrderByDescending(p => p.UpdatedAt).Take(8))
+                    {
+                        <button class="continue-card" @onclick="() => Run(() => Play(p.Item))"><Artwork Value="@p.Item.ArtworkId" /><strong>@p.Item.Name</strong><small>@Time(p.Position) of @Time(p.Duration)</small><progress value="@p.Position" max="@p.Duration"></progress></button>
+                    }</div>
+                }
+                else { <div class="quiet-empty"><span>◷</span><div><strong>Your next chapter starts here</strong><p>Start a movie or episode and we’ll remember your place.</p></div></div> }
+                <div class="section-heading"><div><span class="eyebrow">FIND YOUR NEXT FAVORITE</span><h2>Explore your library</h2></div></div>
+                <div class="explore-grid">
+                    <a href="#live"><span class="explore-icon">◉</span><h3>Live TV</h3><p>Be there as it happens</p><span>Explore channels ↗</span></a>
+                    <a href="#vod"><span class="explore-icon">▰</span><h3>Movies</h3><p>A little escape, a great story</p><span>Find a movie ↗</span></a>
+                    <a href="#series"><span class="explore-icon">▤</span><h3>Series</h3><p>Just one more episode</p><span>Discover a series ↗</span></a>
+                </div>
+            }
+            else if (_route is "live" or "vod" or "series" or "guide")
+            {
+                <div class="section-heading"><div><span class="eyebrow">@(_route == "guide" ? "WHAT’S ON" : "MAKE TIME FOR SOMETHING GOOD")</span><h1>@PageTitle</h1></div><button disabled="@(_busy || _provider.Length == 0)" @onclick="() => Run(() => LoadCatalog(true))">↻ Refresh</button></div>
+                <div class="filters">
+                    <input type="search" placeholder="Search your library…" aria-label="Search library" value="@_search" @oninput="SearchChanged" />
+                    <select aria-label="Category" value="@_category" @onchange="CategoryChanged">
+                        <option value="@@all">All categories</option><option value="@@favorites">★ Favorites</option>
+                        @if (_route is "live" or "guide") { <option value="@@recent">Recently watched</option> }
+                        @foreach (var c in _catalog.Categories) { <option value="@c.Id">@c.Name @(_library.HiddenCategories.Contains(Kind + ":" + c.Id) ? "(hidden)" : "")</option> }
+                    </select>
+                    <select aria-label="Sort" value="@_sort" @onchange="SortChanged"><option value="Default">Provider order</option><option value="Name">Name</option><option value="Newest">Newest</option></select>
+                    @if (!_category.StartsWith("@")) { <button @onclick="() => Run(ToggleHidden)">@(_library.HiddenCategories.Contains(Kind + ":" + _category) ? "Show category" : "Hide category")</button> }
+                </div>
+                @if (_route == "guide")
+                {
+                    <div class="actions guide-nav"><button @onclick="() => Run(() => ShiftGuide(-6))">← Earlier</button><span>@_guideFrom.ToLocalTime().ToString("ddd, MMM d · h tt")</span><button @onclick="() => Run(() => ShiftGuide(6))">Later →</button></div>
+                }
+                <p class="muted result-count">@_visible.Count.ToString("N0") titles @if (_catalog.LoadedAt != default) { <span>· Updated @_catalog.LoadedAt.ToLocalTime().ToString("MMM d, h:mm tt")</span> }</p>
+                @if (_visible.Count == 0) { <section class="empty"><h2>@(_provider.Length == 0 ? "Choose a provider to get started" : "No titles here yet")</h2><p>@(_provider.Length == 0 ? "Add your provider in Settings, then explore your library." : "Try a different category or search. Refresh to check for new titles.")</p><a href="#settings" class="button">Settings</a></section> }
+                <Virtualize Items="@_visible" Context="item" ItemSize="@(_route == "guide" ? 180 : 112)" OverscanCount="4">
+                    <article class="media-row" @key="item.Id">
+                        <button class="media-title" @onclick="() => Run(() => Select(item))"><Artwork Value="@item.ArtworkId" /><span><strong>@item.Name</strong><small>@CategoryName(item.CategoryId)</small></span></button>
+                        <button class="favorite @(_library.Favorites.Contains(Key(item)) ? "active" : "")" aria-label="Toggle favorite" @onclick="() => Run(() => ToggleFavorite(item))">@(_library.Favorites.Contains(Key(item)) ? "★" : "☆")</button>
+                        @if (_route == "guide")
+                        {
+                            <div class="programmes">
+                                @foreach (var entry in _guide.GetValueOrDefault(item.Id, []))
+                                {
+                                    <button disabled="@(!item.HasArchive || entry.Start >= DateTimeOffset.UtcNow)" @onclick="() => Run(() => Catchup(item, entry))"><time>@entry.Start.ToLocalTime().ToString("h:mm tt")</time><strong>@entry.Title</strong>@if (entry.IsFromChannelName) { <small>Estimated</small> }</button>
+                                }
+                                @if (!_guide.TryGetValue(item.Id, out var entries) || entries.Count == 0) { <button @onclick="() => Run(() => ShortGuide(item))">Load now / next</button> }
+                            </div>
+                        }
+                    </article>
+                </Virtualize>
+            }
+            else if (_route == "detail" && _selected is not null)
+            {
+                <button @onclick="() => Navigate(_returnRoute)">← Back to library</button>
+                <div class="detail-heading"><Artwork Value="@_selected.ArtworkId" /><div><span class="eyebrow">@_selected.Kind.ToUpperInvariant()</span><h1>@(_detail?.Name ?? _selected.Name)</h1><p class="muted">@_detail?.Genre · @_detail?.Rating</p><p>@_detail?.Plot</p><div class="actions">
+                    @if (_selected.Kind != "series") { <button class="primary" @onclick="() => Run(() => Play(_selected))">▶ Play</button> }
+                    <button @onclick="() => Run(() => ToggleFavorite(_selected))">@(_library.Favorites.Contains(Key(_selected)) ? "★ Favorited" : "☆ Favorite")</button>
+                </div></div></div>
+                @foreach (var season in (_detail?.Episodes ?? []).GroupBy(e => e.CategoryId))
+                {
+                    <h2>Season @season.Key</h2>
+                    @foreach (var episode in season)
+                    {
+                        <div class="media-row"><button class="media-title" @onclick="() => Run(() => Play(episode))"><span class="episode-play">▶</span><strong>@episode.Name</strong></button></div>
+                    }
+                }
+            }
+            else if (_route == "settings")
+            {
+                <div class="section-heading"><div><span class="eyebrow">MAKE IT YOURS</span><h1>Settings</h1></div></div>
+                <div class="settings-grid">
+                    <section class="panel"><h2>Your IPTV provider</h2><p>Connect directly using your provider’s HTTPS address and Xtream login. Credentials, favorites and watch progress are saved in this browser on this device.</p>
+                        @foreach (var p in _providers) { <div class="provider-row"><span><strong>@p.Name</strong><small>@p.Status · @(p.MaxConnections?.ToString() ?? "?") connections</small></span><button class="danger" @onclick="() => Run(() => DeleteProvider(p.Id))">Remove</button></div> }
+                        <form @onsubmit="() => Run(AddProvider)" @onsubmit:preventDefault>
+                            <label>Name<input @bind="_providerName" @bind:event="oninput" required placeholder="My provider" /></label><label>Provider URL<input type="url" @bind="_providerUrl" @bind:event="oninput" required placeholder="https://provider.example.com" /></label>
+                            <label>Username<input @bind="_username" @bind:event="oninput" autocomplete="off" required /></label><label>Password<input type="password" @bind="_password" @bind:event="oninput" autocomplete="off" required /></label><button class="primary" disabled="@_busy" type="submit">Test & add provider</button>
+                        </form></section>
+                    <section class="panel"><h2>Playback & guide</h2><label>Appearance<select @bind="_theme" @bind:after="SavePreferences"><option value="dark">Dark</option><option value="light">Light</option></select></label>
+                        <label class="check"><input type="checkbox" @bind="_nameGuide" @bind:after="SavePreferences" /> Fill guide gaps from channel names</label>
+                        <label>Open a local video<input id="local-file" type="file" accept="video/*,.mkv" @onchange="() => Run(PlayLocal)" /></label>
+                    </section>
+                    <section class="panel"><h2>Play on iPhone</h2><p>Open this site in Safari or Chrome. To install it, tap Share, then <strong>Add to Home Screen</strong>.</p><p>Live TV requests HLS streams. Movies and episodes play in the phone’s native video player, with available audio and subtitle controls.</p><p>If a title will not play, its format or the provider’s browser access may be unsupported. This version streams directly, without conversion, recording or downloads.</p></section>
+                </div>
+            }
+            <footer>XTREAM PLAYER <span>Made for your own media.</span></footer>
+        </main>
+        <nav class="mobile-nav" aria-label="Main navigation">
+            <a class="@(_route == "home" ? "selected" : "")" href="#home">⌂<span>Home</span></a><a class="@(_route == "live" ? "selected" : "")" href="#live">◉<span>Live</span></a><a class="@(_route is "vod" or "series" ? "selected" : "")" href="#vod">▰<span>Movies</span></a><a class="@(_route == "series" ? "selected" : "")" href="#series">▤<span>Series</span></a><a class="@(_route == "settings" ? "selected" : "")" href="#settings">☷<span>More</span></a>
+        </nav>
+    </div>
+</div>

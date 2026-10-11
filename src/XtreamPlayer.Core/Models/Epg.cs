@@ -27,6 +27,12 @@ public sealed record EpgProgramme
     public string? Category { get; init; }
     public string? EpisodeNumber { get; init; }
 
+    /// <summary>
+    /// Read from the channel's name rather than a guide feed, so the times are
+    /// a best guess; see ChannelNameSchedule.
+    /// </summary>
+    public bool IsFromChannelName { get; init; }
+
     public TimeSpan Duration => Stop - Start;
 
     public bool IsNowPlaying(DateTimeOffset at) => at >= Start && at < Stop;

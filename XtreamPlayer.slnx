@@ -1,12 +1,16 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/XtreamPlayer.App/XtreamPlayer.App.csproj" />
+    <Project Path="src/XtreamPlayer.Application/XtreamPlayer.Application.csproj" />
     <Project Path="src/XtreamPlayer.Core/XtreamPlayer.Core.csproj" />
     <Project Path="src/XtreamPlayer.Infrastructure/XtreamPlayer.Infrastructure.csproj" />
     <Project Path="src/XtreamPlayer.Playback/XtreamPlayer.Playback.csproj" />
+    <Project Path="src/XtreamPlayer.Server/XtreamPlayer.Server.csproj" />
+    <Project Path="src/XtreamPlayer.Web/XtreamPlayer.Web.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/XtreamPlayer.Tests/XtreamPlayer.Tests.csproj" />
     <Project Path="tests/XtreamPlayer.UiTests/XtreamPlayer.UiTests.csproj" />
+    <Project Path="tests/XtreamPlayer.WebTests/XtreamPlayer.WebTests.csproj" />
   </Folder>
 </Solution>

@@ -1,0 +1,37 @@
+services:
+  server:
+    build:
+      context: ../..
+      dockerfile: packaging/server/Dockerfile
+    restart: unless-stopped
+    environment:
+      Server__PairingCode: ${PAIRING_CODE:?Set a random pairing code of at least 32 characters}
+      Server__PublicUrl: https://${SERVER_HOST:?Set the backend hostname}
+      Server__AllowedOrigins__0: ${PWA_ORIGIN:?Set the PWA origin, without a path}
+      Server__MaxMediaBytes: ${MAX_MEDIA_BYTES:-107374182400}
+      Server__MaxTranscodes: ${MAX_TRANSCODES:-1}
+      TZ: ${TZ:-America/Regina}
+    volumes:
+      - server-data:/data
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+  proxy:
+    image: caddy:2
+    restart: unless-stopped
+    environment:
+      SERVER_HOST: ${SERVER_HOST}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - server
+volumes:
+  server-data:
+  caddy-data:
+  caddy-config:

@@ -1,0 +1,52 @@
+name: Validate desktop, PWA and backend
+on:
+  pull_request:
+  push:
+    branches: [main, master]
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: dotnet test XtreamPlayer.slnx -c Release
+      - run: node --test tests/web/*.test.cjs
+      - run: node packaging/publish-pwa.mjs /xtream-player/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pwa-preview
+          path: dist/pwa/wwwroot
+  container:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Install media test tools
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - name: Verify playback, recording and recovery with real FFmpeg
+        env:
+          XTREAM_TEST_FFMPEG: /usr/bin/ffmpeg
+          XTREAM_TEST_FFPROBE: /usr/bin/ffprobe
+        run: dotnet test tests/XtreamPlayer.WebTests -c Release
+      - name: Validate HTTPS proxy configuration
+        run: docker run --rm -e SERVER_HOST=backend.example.com -v "${{ github.workspace }}/packaging/server/Caddyfile:/etc/caddy/Caddyfile:ro" caddy:2 caddy adapt --config /etc/caddy/Caddyfile --validate
+      - run: docker build -f packaging/server/Dockerfile -t xtream-server .
+      - name: Verify startup and health
+        shell: bash
+        run: |
+          docker run -d --name xtream -p 5080:8080 -e Server__PairingCode="$(openssl rand -hex 32)" -e Server__PublicUrl=http://localhost:5080 xtream-server
+          for attempt in $(seq 1 30); do
+            if curl --fail http://localhost:5080/health; then exit 0; fi
+            sleep 2
+          done
+          docker logs xtream
+          exit 1

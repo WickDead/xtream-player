@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <ItemGroup>
+    <ProjectReference Include="../XtreamPlayer.Application/XtreamPlayer.Application.csproj" />
+    <ProjectReference Include="../XtreamPlayer.Infrastructure/XtreamPlayer.Infrastructure.csproj" />
+  </ItemGroup>
+</Project>

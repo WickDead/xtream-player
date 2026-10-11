@@ -1,0 +1,33 @@
+<!doctype html><html><head><meta charset="utf-8"><base href="/xtream-player/"><title>Xtream offline browser checks</title>
+<style>body{font:16px system-ui;background:#101917;color:#e8efdf;padding:30px}button,a{padding:14px;display:inline-block;background:#d0edab;color:#203019;border:0;border-radius:8px;margin:8px}video{max-width:600px;width:100%}pre{white-space:pre-wrap}</style></head><body>
+<h1>Published PWA offline checks</h1><p>Uses generated, disposable video. No provider account or personal media.</p>
+<button id="run">Run offline checks</button><a href="./#offline">Open offline library</a><pre id="result">Ready.</pre><video controls muted playsinline></video>
+<script src="storage.js"></script><script src="app.js"></script>
+<script>
+const output=document.querySelector("#result");const log=text=>output.textContent+="\n"+text;
+document.querySelector("#run").onclick=async()=>{
+ document.querySelector("#run").disabled=true;
+ try {
+  await xtream.init({invokeMethodAsync:async(name,error)=>{if(name==="OfflineChanged"&&error)log(error);}});
+  await navigator.serviceWorker.ready;
+  if(!navigator.serviceWorker.controller)await new Promise(resolve=>navigator.serviceWorker.addEventListener("controllerchange",resolve,{once:true}));
+  log("PASS: published service worker controls the page.");
+  const info=await(await fetch("/fixture-info")).json();
+  await xtream.download({id:"f".repeat(32),title:"Generated offline test",bytes:info.bytes,version:"fixture-v1",url:location.origin+"/fixture.mp4"},
+   {id:"fixture",name:"Generated offline test",categoryId:"",categoryOrder:0,kind:"vod"},"fixture","fixture");
+  let row;for(let i=0;i<120;i++){row=(await xtream.offlineList()).find(r=>r.title==="Generated offline test");if(row?.complete)break;if(row?.error)throw Error(row.error);await new Promise(r=>setTimeout(r,250));}
+  if(!row?.complete)throw Error("Transfer did not finish.");
+  log("PASS: real downloader worker stored and validated "+row.bytes+" bytes in OPFS.");
+  const url=xtream.offlineUrl(row.id), response=await fetch(url,{headers:{Range:"bytes=0-1"}});
+  if(response.status!==206||(await response.arrayBuffer()).byteLength!==2)throw Error("Two-byte probe failed.");
+  log("PASS: service worker answers the Safari byte-range probe.");
+  const video=document.querySelector("video");video.src=url;
+  await new Promise((resolve,reject)=>{video.onloadedmetadata=resolve;video.onerror=()=>reject(Error("Offline video could not load."));});
+  video.currentTime=4;
+  await new Promise((resolve,reject)=>{video.onseeked=resolve;video.onerror=()=>reject(Error("Offline seeking failed."));});
+  log("PASS: native video loaded "+video.duration.toFixed(1)+" seconds and sought to "+video.currentTime.toFixed(1)+".");
+  await video.play();log("PASS: native playback started from OPFS through the service worker.");
+  log("ALL CHECKS PASSED. Open offline library, stop this test server, then reload to verify cold offline startup.");
+ }catch(e){log("FAIL: "+e.message);}finally{document.querySelector("#run").disabled=false;}
+};
+</script></body></html>

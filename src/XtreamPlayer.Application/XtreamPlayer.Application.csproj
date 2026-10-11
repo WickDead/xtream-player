@@ -1,0 +1,4 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup><ProjectReference Include="../XtreamPlayer.Core/XtreamPlayer.Core.csproj" /></ItemGroup>
+  <ItemGroup><InternalsVisibleTo Include="XtreamPlayer.Tests" /></ItemGroup>
+</Project>

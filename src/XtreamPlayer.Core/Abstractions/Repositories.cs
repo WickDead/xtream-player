@@ -89,6 +89,11 @@ public static class SettingKeys
     public const string DownloadsPath = "downloads.path";
     public const string CatalogTtlHours = "catalog.ttlHours";
     public const string EpgTtlHours = "epg.ttlHours";
+    public const string EpgFromChannelNames = "epg.fromChannelNames";
+    public const string EpgSportsTimes = "epg.sportsTimes";
+
+    /// <summary>Protected like a provider password: "{scheme}:{base64}".</summary>
+    public const string SportsDbApiKey = "sports.theSportsDbKey";
     public const string PreferredAudioLanguages = "playback.audioLanguages";
     public const string PreferredSubtitleLanguages = "playback.subtitleLanguages";
     public const string SubtitlesOffByDefault = "playback.subtitlesOff";

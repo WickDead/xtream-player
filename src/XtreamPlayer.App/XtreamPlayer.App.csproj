@@ -62,6 +62,7 @@
 
   <ItemGroup>
     <ProjectReference Include="../XtreamPlayer.Core/XtreamPlayer.Core.csproj" />
+    <ProjectReference Include="../XtreamPlayer.Application/XtreamPlayer.Application.csproj" />
     <ProjectReference Include="../XtreamPlayer.Infrastructure/XtreamPlayer.Infrastructure.csproj" />
     <ProjectReference Include="../XtreamPlayer.Playback/XtreamPlayer.Playback.csproj" />
   </ItemGroup>

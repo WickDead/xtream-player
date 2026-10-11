@@ -39,6 +39,16 @@ series, and an XMLTV feed of ~21,700 programmes across 1,082 channels.
 > and it comes out only after a stretch of daily use on the new app. Its final
 > state is tagged `v0.1.2-tauri-final`.
 
+## iPhone PWA
+
+The Blazor WebAssembly PWA connects directly to your IPTV provider, with no extra
+backend required. Browse live TV, movies and series, then play compatible streams
+in Safari or Chrome on iPhone. Favorites and watch progress stay on each device.
+Recording, downloads and server conversion are outside this simplified PWA.
+
+See [PWA setup and GitHub Pages deployment](docs/pwa.md). Real-provider/iPhone
+compatibility still needs testing.
+
 ## Installing
 
 Download the installer from [Releases](../../releases) and run it. It installs

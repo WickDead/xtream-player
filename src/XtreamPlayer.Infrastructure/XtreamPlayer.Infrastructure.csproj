@@ -5,7 +5,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="../XtreamPlayer.Core/XtreamPlayer.Core.csproj" />
+    <ProjectReference Include="../XtreamPlayer.Application/XtreamPlayer.Application.csproj" />
   </ItemGroup>
 
   <ItemGroup>

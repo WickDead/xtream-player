@@ -23,7 +23,8 @@ public sealed class CatalogFilterTests
         ItemSort sort = ItemSort.Default,
         string[]? favorites = null,
         string[]? hidden = null,
-        string[]? recent = null) => new()
+        string[]? recent = null,
+        string[]? newThisWeek = null) => new()
     {
         Selection = selection ?? CategorySelection.All.Instance,
         SearchText = search,
@@ -31,6 +32,7 @@ public sealed class CatalogFilterTests
         FavoriteIds = new HashSet<string>(favorites ?? [], StringComparer.Ordinal),
         HiddenCategoryIds = new HashSet<string>(hidden ?? [], StringComparer.Ordinal),
         RecentIds = recent ?? [],
+        NewThisWeekIds = new HashSet<string>(newThisWeek ?? [], StringComparer.Ordinal),
     };
 
     private static string[] Names(IEnumerable<int> indexes) =>
@@ -125,6 +127,17 @@ public sealed class CatalogFilterTests
                 CategorySelection.Recent.Instance, recent: ["4", "1"]))));
 
     [Fact]
+    public void NewThisWeekFiltersByIdWithOrWithoutAPrecomputedOrdering()
+    {
+        var request = Request(CategorySelection.NewThisWeek.Instance, sort: ItemSort.Newest, newThisWeek: ["3", "2"]);
+
+        Assert.Equal(["TSN 1", "BBC One"], Names(CatalogFilter.Apply(Items, request)));
+        Assert.Equal(
+            ["TSN 1", "BBC One"],
+            Names(CatalogFilter.Apply(Items, request, new CatalogOrdering(Items))));
+    }
+
+    [Fact]
     public void AnEmptyCatalogIsHandled() =>
         Assert.Empty(CatalogFilter.Apply([], Request()));
 }
@@ -143,11 +156,13 @@ public sealed class CategoryRailTests
         bool showHidden = false,
         string[]? hidden = null,
         int favorites = 0,
-        int recent = -1) =>
+        int recent = -1,
+        int newThisWeek = 0) =>
         CatalogFilter.BuildRail(
             Categories,
             new HashSet<string>(hidden ?? [], StringComparer.Ordinal),
-            sort, showHidden, totalCount: 170, favoriteCount: favorites, recentCount: recent);
+            sort, showHidden, totalCount: 170, favoriteCount: favorites, recentCount: recent,
+            newThisWeekCount: newThisWeek);
 
     [Fact]
     public void AllIsAlwaysFirst()
@@ -166,6 +181,19 @@ public sealed class CategoryRailTests
 
         Assert.DoesNotContain(Build(), r => r.Name == "Recent");
         Assert.Contains(Build(recent: 5), r => r.Name == "Recent");
+    }
+
+    [Fact]
+    public void NewThisWeekSitsDirectlyUnderAllWhenItHasContent()
+    {
+        Assert.DoesNotContain(Build(favorites: 3), r => r.Name == "New This Week");
+
+        var rail = Build(favorites: 3, newThisWeek: 12);
+
+        Assert.Equal(["All", "New This Week", "Favorites", "Sports"], rail.Take(4).Select(r => r.Name));
+        Assert.Equal(12, rail[1].Count);
+        Assert.False(rail[1].CanHide);
+        Assert.IsType<CategorySelection.NewThisWeek>(rail[1].Selection);
     }
 
     [Fact]
@@ -209,6 +237,7 @@ public sealed class CategoryRailTests
         Assert.Equal("@all", CategorySelection.All.Instance.PersistKey);
         Assert.Equal("@favorites", CategorySelection.Favorites.Instance.PersistKey);
         Assert.Equal("@recent", CategorySelection.Recent.Instance.PersistKey);
+        Assert.Equal("@new-this-week", CategorySelection.NewThisWeek.Instance.PersistKey);
         Assert.Equal("sports", new CategorySelection.Real("sports", "Sports", 0).PersistKey);
     }
 }

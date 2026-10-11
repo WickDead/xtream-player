@@ -1,0 +1,22 @@
+{
+    # Error logs may contain a request even when access logging is off.
+    log default {
+        format filter {
+            wrap json
+            fields {
+                request delete
+                resp_headers delete
+            }
+        }
+    }
+}
+
+{$SERVER_HOST} {
+    encode zstd gzip
+    reverse_proxy server:8080 {
+        flush_interval -1
+    }
+    # Access logging intentionally disabled: signed media URLs are credentials.
+    header Referrer-Policy "no-referrer"
+    header X-Content-Type-Options "nosniff"
+}

@@ -94,6 +94,28 @@ public sealed record SeriesItem
     public DateTimeOffset? LastModified { get; init; }
 }
 
+/// <summary>
+/// One episode from a public TV schedule, as opposed to the provider's catalog.
+/// </summary>
+/// <remarks>
+/// Only the show name ties it to a provider series; there is no shared id.
+/// </remarks>
+public sealed record AiredEpisode(
+    int EpisodeId,
+    int ShowId,
+    string ShowName,
+    int? PremieredYear,
+    int? Season,
+    int? Number,
+    string? EpisodeName,
+    DateTimeOffset AiredAt);
+
+/// <summary>
+/// The parts of a provider episode that say whether a scheduled episode is
+/// available: its numbering, and when it was added.
+/// </summary>
+public sealed record ProviderEpisode(int Season, int Number, DateTimeOffset? Added);
+
 public sealed record SeriesSeason
 {
     public required int Number { get; init; }

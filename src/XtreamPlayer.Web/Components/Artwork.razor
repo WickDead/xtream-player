@@ -1,0 +1,5 @@
+<div class="artwork" aria-hidden="true"><span>▶</span>@if (SafeUrl is not null) { <img src="@SafeUrl" alt="" loading="lazy" referrerpolicy="no-referrer" /> }</div>
+@code {
+    [Parameter] public string? Value { get; set; }
+    private string? SafeUrl => Uri.TryCreate(Value, UriKind.Absolute, out var url) && url.Scheme == "https" && url.UserInfo.Length == 0 ? url.AbsoluteUri : null;
+}

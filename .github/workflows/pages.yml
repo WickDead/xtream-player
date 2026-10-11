@@ -1,0 +1,36 @@
+name: Publish iPhone PWA
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: pages
+  cancel-in-progress: false
+jobs:
+  publish:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/configure-pages@v5
+        id: pages
+      - run: node --test tests/web/*.test.cjs
+      - name: Build for the Pages subpath
+        env:
+          PAGES_BASE: ${{ steps.pages.outputs.base_path }}
+        run: node packaging/publish-pwa.mjs "${PAGES_BASE%/}/"
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist/pwa/wwwroot
+      - uses: actions/deploy-pages@v4
+        id: deployment

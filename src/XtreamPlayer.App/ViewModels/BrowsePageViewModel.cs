@@ -4,6 +4,7 @@ using CommunityToolkit.Mvvm.Input;
 using XtreamPlayer.App.Behaviors;
 using XtreamPlayer.Core.Abstractions;
 using XtreamPlayer.Core.Library;
+using XtreamPlayer.Application;
 using XtreamPlayer.Core.Models;
 using XtreamPlayer.Core.Navigation;
 using XtreamPlayer.Infrastructure.Xtream;
@@ -77,13 +78,12 @@ public abstract partial class BrowsePageViewModel<TItem> : PageViewModelBase, ID
     private readonly ICatalogStore _catalogStore;
 
     private IReadOnlyList<TItem> _source = [];
-    private IReadOnlyList<FilterableItem> _filterable = [];
 
     /// <summary>
     /// Sort orders for the current catalog, built once rather than on every
     /// keystroke. See <see cref="CatalogOrdering"/> for why.
     /// </summary>
-    private CatalogOrdering? _ordering;
+    private BrowseWorkflow<TItem>? _browseWorkflow;
     private IReadOnlyList<Category> _categories = [];
     private HashSet<string> _hiddenIds = new(StringComparer.Ordinal);
 
@@ -228,14 +228,7 @@ public abstract partial class BrowsePageViewModel<TItem> : PageViewModelBase, ID
         _categories = categories;
         _scope = scope;
 
-        var projected = new FilterableItem[items.Count];
-        for (var i = 0; i < items.Count; i++)
-        {
-            projected[i] = Project(items[i], i);
-        }
-
-        _filterable = projected;
-        _ordering = new CatalogOrdering(projected);
+        _browseWorkflow = new BrowseWorkflow<TItem>(items, Project);
 
         var hiddenRows = await _hidden.ListAsync(scope, Scope, ct).ConfigureAwait(false);
         var resolver = new HiddenCategoryResolver(hiddenRows);
@@ -331,13 +324,12 @@ public abstract partial class BrowsePageViewModel<TItem> : PageViewModelBase, ID
             RecentIds = RecentIds,
         };
 
-        var snapshot = _filterable;
-        var ordering = _ordering;
+        var workflow = _browseWorkflow;
         var source = _source;
 
         _ = Task.Run(() =>
         {
-            var indexes = CatalogFilter.Apply(snapshot, request, ordering);
+            var matches = workflow?.Apply(request) ?? [];
 
             if (cts.IsCancellationRequested)
             {
@@ -352,16 +344,16 @@ public abstract partial class BrowsePageViewModel<TItem> : PageViewModelBase, ID
                 }
 
                 Items.Clear();
-                foreach (var index in indexes)
+                foreach (var item in matches)
                 {
-                    Items.Add(source[index]);
+                    Items.Add(item);
                 }
 
                 RebuildRows();
 
-                ResultSummary = indexes.Count == source.Count
-                    ? $"{indexes.Count:N0} items"
-                    : $"{indexes.Count:N0} of {source.Count:N0}";
+                ResultSummary = matches.Count == source.Count
+                    ? $"{matches.Count:N0} items"
+                    : $"{matches.Count:N0} of {source.Count:N0}";
 
                 // A changed result set invalidates any saved scroll offset.
                 ScrollPositions.Remove(ListScrollKey);

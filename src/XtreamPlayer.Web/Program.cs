@@ -1,0 +1,12 @@
+using Microsoft.AspNetCore.Components.Web;
+using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
+using XtreamPlayer.Web;
+using XtreamPlayer.Web.Services;
+var builder = WebAssemblyHostBuilder.CreateDefault(args);
+builder.RootComponents.Add<App>("#app");
+builder.RootComponents.Add<HeadOutlet>("head::after");
+builder.Services.AddScoped<BrowserStore>();
+builder.Services.AddScoped<XtreamPlayer.Application.IDeviceStorage>(s => s.GetRequiredService<BrowserStore>());
+builder.Services.AddScoped(_ => new HttpClient());
+builder.Services.AddScoped<XtreamPlayer.Application.DirectProviderClient>();
+await builder.Build().RunAsync();

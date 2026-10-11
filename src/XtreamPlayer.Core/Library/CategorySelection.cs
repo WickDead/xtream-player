@@ -30,6 +30,12 @@ public abstract record CategorySelection
         public static Recent Instance { get; } = new();
     }
 
+    /// <summary>Series only: shows with an episode that aired in the last week.</summary>
+    public sealed record NewThisWeek : CategorySelection
+    {
+        public static NewThisWeek Instance { get; } = new();
+    }
+
     public sealed record Real(string CategoryId, string Name, int Order) : CategorySelection;
 
     public string DisplayName => this switch
@@ -37,6 +43,7 @@ public abstract record CategorySelection
         All => "All",
         Favorites => "Favorites",
         Recent => "Recent",
+        NewThisWeek => "New This Week",
         Real real => real.Name,
         _ => "Unknown",
     };
@@ -47,6 +54,7 @@ public abstract record CategorySelection
         All => "@all",
         Favorites => "@favorites",
         Recent => "@recent",
+        NewThisWeek => "@new-this-week",
         Real real => real.CategoryId,
         _ => "@all",
     };
