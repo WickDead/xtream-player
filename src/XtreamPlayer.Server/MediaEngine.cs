@@ -137,7 +137,7 @@ public sealed class MediaEngine(ServerOptions options, CatalogService catalogs, 
             "-hls_list_size", request.Kind == "live" && request.Start is null ? "8" : "0",
             "-hls_flags", request.Kind == "live" && request.Start is null ? "delete_segments+independent_segments" : "independent_segments"]);
         if (textSubtitle)
-            args.AddRange(["-var_stream_map", "v:0" + (audio is not null ? ",a:0" : "") + ",s:0,sgroup:subs,sname:Subtitles",
+            args.AddRange(["-var_stream_map", "v:0" + (audio is not null ? ",a:0" : "") + ",s:0,sgroup:subs",
                 "-master_pl_name", "master.m3u8"]);
         args.AddRange(["-hls_segment_filename", Path.Combine(directory, "segment-%06d.ts"), Path.Combine(directory, "index.m3u8")]);
         return args;
